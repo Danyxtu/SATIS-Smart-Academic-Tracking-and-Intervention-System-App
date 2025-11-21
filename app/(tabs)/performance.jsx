@@ -112,7 +112,7 @@ const AcademicTracker = () => {
                       key={index} 
                       style={styles.subjectCard}
                       onPress={() => router.push({
-                      pathname: '/(screens)/SubjectDetail',
+                      pathname: '/SubjectDetail',
                       params: { 
                         subjectName: subject.name,
                         teacher: subject.teacher,

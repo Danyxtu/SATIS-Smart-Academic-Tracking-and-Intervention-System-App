@@ -1,7 +1,7 @@
 import React from 'react';
+import {SafeAreaView} from 'react-native-safe-area-context';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
-import { Mail, Phone, MapPin, Calendar, Book, Users } from 'lucide-react';
-import { useRouter } from 'expo-router'
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 function StudentProfile() {
   const student = {
@@ -21,7 +21,12 @@ function StudentProfile() {
   };
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
       {/* Header Section */}
       <View style={styles.headerContainer}>
         <View style={styles.avatar}>
@@ -44,12 +49,12 @@ function StudentProfile() {
       {/* Personal Information */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Users size={20} color="#333" style={{ marginRight: 8 }} />
+          <MaterialCommunityIcons name="account-group-outline" size={20} color="#333" style={{ marginRight: 8 }} />
           <Text style={styles.sectionTitle}>Personal Information</Text>
         </View>
         
         <View style={styles.infoItem}>
-          <Mail size={18} color="#999" />
+          <Ionicons name="mail-outline" size={18} color="#999" />
           <View style={styles.infoContent}>
             <Text style={styles.infoLabel}>Email</Text>
             <Text style={styles.infoValue}>{student.email}</Text>
@@ -57,7 +62,7 @@ function StudentProfile() {
         </View>
 
         <View style={styles.infoItem}>
-          <Phone size={18} color="#999" />
+          <Ionicons name="call-outline" size={18} color="#999" />
           <View style={styles.infoContent}>
             <Text style={styles.infoLabel}>Phone</Text>
             <Text style={styles.infoValue}>{student.phone}</Text>
@@ -65,7 +70,7 @@ function StudentProfile() {
         </View>
 
         <View style={styles.infoItem}>
-          <MapPin size={18} color="#999" />
+          <MaterialCommunityIcons name="map-marker-outline" size={18} color="#999" />
           <View style={styles.infoContent}>
             <Text style={styles.infoLabel}>Address</Text>
             <Text style={styles.infoValue}>{student.address}</Text>
@@ -73,7 +78,7 @@ function StudentProfile() {
         </View>
 
         <View style={styles.infoItem}>
-          <Calendar size={18} color="#999" />
+          <Ionicons name="calendar-outline" size={18} color="#999" />
           <View style={styles.infoContent}>
             <Text style={styles.infoLabel}>Birth Date</Text>
             <Text style={styles.infoValue}>{student.birthDate}</Text>
@@ -84,7 +89,7 @@ function StudentProfile() {
       {/* Academic Information */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Book size={20} color="#333" style={{ marginRight: 8 }} />
+          <MaterialCommunityIcons name="book-open-page-variant" size={20} color="#333" style={{ marginRight: 8 }} />
           <Text style={styles.sectionTitle}>Academic Information</Text>
         </View>
 
@@ -107,7 +112,7 @@ function StudentProfile() {
       {/* Guardian Information */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Users size={20} color="#333" style={{ marginRight: 8 }} />
+          <MaterialCommunityIcons name="account-group-outline" size={20} color="#333" style={{ marginRight: 8 }} />
           <Text style={styles.sectionTitle}>Guardian Information</Text>
         </View>
 
@@ -121,15 +126,23 @@ function StudentProfile() {
           <Text style={styles.infoValue}>{student.guardianPhone}</Text>
         </View>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
     backgroundColor: '#f9fafb',
+  },
+  container: {
+    flex: 1,
     padding: 16,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 32,
   },
   headerContainer: {
     flexDirection: 'row',
@@ -221,13 +234,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#1f2937',
-  },
-  infoItem: {
-    flexDirection: 'row',
-    marginBottom: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
   },
   infoItem: {
     flexDirection: 'row',

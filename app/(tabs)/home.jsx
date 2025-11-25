@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import Mainmenu from "../mainMenu.jsx";
+import axios from "axios";
 
 import {
   View,
@@ -12,13 +13,27 @@ import {
   ImageBackground,
   Animated,
   Dimensions,
-  StatusBar
+  StatusBar,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
 export default function Home() {
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const res = await axios.get(
+          "https://meticulously-unfinishable-arletha.ngrok-free.dev/api/test"
+        );
+        console.log("Response:", res.data);
+      } catch (err) {
+        console.log("Error:", err.message);
+      }
+    };
+
+    fetchData();
+  }, []);
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.mainMenuWrapper}>
@@ -50,7 +65,7 @@ export default function Home() {
 
         {/* Welcome Card */}
         <ImageBackground
-          source={require('../../assets/school.jpg')}
+          source={require("../../assets/school.jpg")}
           style={styles.welcomeCard}
           imageStyle={styles.welcomeCardImage}
         >
@@ -175,22 +190,22 @@ export default function Home() {
 
 const styles = StyleSheet.create({
   safe: {
-  flex: 1,
-  backgroundColor: '#fff7fb', // Same pink background
-},
-mainMenuWrapper: {
-  paddingHorizontal: 16,
-  paddingTop: 8,
-  backgroundColor: '#fff7fb',
-},
-scrollView: {
-  flex: 1,
-},
-scrollContent: {
-  padding: 16,          // or paddingHorizontal: 16
-  paddingTop: 8,
-  paddingBottom: 100,   // Space for bottom navigation
-},
+    flex: 1,
+    backgroundColor: "#fff7fb", // Same pink background
+  },
+  mainMenuWrapper: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    backgroundColor: "#fff7fb",
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16, // or paddingHorizontal: 16
+    paddingTop: 8,
+    paddingBottom: 100, // Space for bottom navigation
+  },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -213,7 +228,6 @@ scrollContent: {
     flex: 1,
     fontSize: 16,
     color: "#1f2937",
-   
   },
   bellIcon: {
     marginLeft: 10,
@@ -222,16 +236,15 @@ scrollContent: {
   welcomeCard: {
     borderRadius: 20,
     marginBottom: 20,
-    overflow: 'hidden',
+    overflow: "hidden",
     height: 160,
-    justifyContent: 'flex-top',
+    justifyContent: "flex-top",
   },
   welcomeCardImage: {
     borderRadius: 20,
   },
   welcomeOverlay: {
     padding: 20,
-    
   },
   welcomeTitle: {
     fontSize: 26,

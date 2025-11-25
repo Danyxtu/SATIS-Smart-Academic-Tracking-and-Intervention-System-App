@@ -144,7 +144,7 @@ function Mainmenu() {
   )
 }
 
-export default Mainmenu
+export default Mainmenu;
 
 const styles = StyleSheet.create({
   header: {

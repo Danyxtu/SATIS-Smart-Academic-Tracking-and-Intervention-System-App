@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import Mainmenu from "../mainMenu.jsx";
+import Mainmenu from "../components/mainMenu";
 
 import {
   View,
@@ -118,20 +118,6 @@ export default function Home() {
 
           <View style={styles.metricItem}>
             <Text style={styles.metricLabel}>Task Completion</Text>
-            <View style={styles.progressBarContainer}>
-              <View style={[styles.progressBar, { width: "70%" }]} />
-            </View>
-            <View style={styles.progressLabels}>
-              <Text style={styles.progressLabel}>0</Text>
-              <Text style={styles.progressLabel}>25</Text>
-              <Text style={styles.progressLabel}>50</Text>
-              <Text style={styles.progressLabel}>75</Text>
-              <Text style={styles.progressLabel}>100</Text>
-            </View>
-          </View>
-
-          <View style={[styles.metricItem, styles.lastMetricItem]}>
-            <Text style={styles.metricLabel}>Overall Health</Text>
             <View style={styles.progressBarContainer}>
               <View style={[styles.progressBar, { width: "70%" }]} />
             </View>

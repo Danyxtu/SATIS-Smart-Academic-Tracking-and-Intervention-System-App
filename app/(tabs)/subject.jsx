@@ -9,7 +9,7 @@ import {
   Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Mainmenu from '../mainMenu';
+import Mainmenu from '../components/mainMenu';
 
 export default function SubjectRisk() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -376,9 +376,12 @@ export default function SubjectRisk() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+      <View style={styles.mainMenuWrapper}>
         <Mainmenu />
+      </View>
 
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+    
         {/* Stats Overview */}
         <View style={styles.statsCard}>
           <View style={styles.statsHeader}>
@@ -529,9 +532,14 @@ export default function SubjectRisk() {
 
 const styles = StyleSheet.create({
   safe: {
-    flex: 1,
-    backgroundColor: '#fff7fb',
-  },
+  flex: 1,
+  backgroundColor: '#fff7fb', // Same pink background
+},
+ mainMenuWrapper: {
+  paddingHorizontal: 16,
+  paddingTop: 8,
+  backgroundColor: '#fff7fb',
+},
   container: {
     padding: 16,
     paddingBottom: 40,

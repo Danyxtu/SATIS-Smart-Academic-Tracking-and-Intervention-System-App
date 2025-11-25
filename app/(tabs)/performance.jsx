@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import Mainmenu from '../components/mainMenu';
 
 const AcademicTracker = () => {
   const router = useRouter();
@@ -46,7 +47,10 @@ const AcademicTracker = () => {
   });
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.safe}>
+      <View style={styles.MainMenuWrapper}>
+      <Mainmenu />
+      </View>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
@@ -161,8 +165,13 @@ git         </View>
 };
 
 const styles = StyleSheet.create({
-  container: {
+  safe: {
     flex: 1,
+    backgroundColor: '#FFE4F0',
+  },
+  MainMenuWrapper: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
     backgroundColor: '#FFE4F0',
   },
   scrollView: {
@@ -171,6 +180,7 @@ const styles = StyleSheet.create({
   header: {
     padding: 20,
     paddingTop: 10,
+    backgroundColor: '#black',
   },
   title: {
     fontSize: 28,

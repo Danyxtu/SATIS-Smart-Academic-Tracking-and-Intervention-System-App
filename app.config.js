@@ -1,9 +1,8 @@
-require("dotenv").config();
-
 export default {
   expo: {
     name: "satis-app",
     slug: "satis-app",
+    scheme: "your-app-scheme",
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/icon.png",
@@ -13,6 +12,7 @@ export default {
       resizeMode: "contain",
       backgroundColor: "#ffffff",
     },
+    plugins: "expo-secure-store",
     ios: {
       supportsTablet: true,
     },

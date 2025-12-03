@@ -1,7 +1,15 @@
 import React from "react";
 
 import { Tabs } from "expo-router";
-import { Home, User, Settings, SquarePen, MessageCircleMore, TriangleAlert } from "lucide-react-native";
+import {
+  Home,
+  User,
+  Settings,
+  SquarePen,
+  ChartLine,
+  MessageCircleMore,
+  TriangleAlert,
+} from "lucide-react-native";
 
 export default function TabsLayout() {
   return (
@@ -34,17 +42,18 @@ export default function TabsLayout() {
         options={{
           title: "Performance Analysis",
           tabBarIcon: ({ color, size }) => (
-            <SquarePen color={color} size={size} />
+            <ChartLine color={color} size={size} />
           ),
         }}
       />
-
 
       <Tabs.Screen
         name="intervention"
         options={{
           title: "Intervention",
-          tabBarIcon: ({ color, size }) => <MessageCircleMore color={color} size={size} />,
+          tabBarIcon: ({ color, size }) => (
+            <MessageCircleMore color={color} size={size} />
+          ),
         }}
       />
 
@@ -60,5 +69,3 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
-
-

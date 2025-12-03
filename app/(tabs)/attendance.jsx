@@ -1,13 +1,13 @@
-
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Mainmenu from "../components/mainMenu";
 import {
   ScrollView,
   View,
   Text,
   TouchableOpacity,
-  StyleSheet,
   Dimensions,
+  ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -21,11 +21,13 @@ import {
   Check,
   X,
 } from "lucide-react-native";
+import styles from "@styles/attendance";
+import axios from "axios";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export default function AttendanceDashboard() {
-  // Geting today's actual date to
+  // Date state
   const today = new Date();
   const todayDate = today.getDate();
   const todayMonth = today.getMonth();
@@ -36,51 +38,46 @@ export default function AttendanceDashboard() {
   const [currentYear, setCurrentYear] = useState(todayYear);
   const [showPercentage, setShowPercentage] = useState(true);
 
-  // Sample events data PWEDE lang mag add aslong as sundan format
-  // const events = {
-  //   // Format: YYYY-M-D
-  //   [`${currentYear}-${currentMonth}-21`]: [
-  //     { type: 'assignment', title: 'Earth and life Assignment Due', status: 'pending' },
-  //     { type: 'exam', title: 'Machine Learning Quiz', status: 'pending' },
-  //   ],
-  //   [`${currentYear}-${currentMonth}-25`]: [
-  //     { type: 'project', title: 'Software Engineering Presentation', status: 'pending' },
-  //   ],
-  //   [`${currentYear}-${currentMonth}-15`]: [
-  //     { type: 'assignment', title: 'English Submitted', status: 'completed' },
-  //   ],
-  // };
-  // No calendar events defined by default. Add entries using the format: 'YYYY-M-D': [{ type, title, status }]
-  const events = {};
+  // API data state
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
-  // Get events for selected date on calendar
+  const fetchData = async (isRefresh = false) => {
+    try {
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
+      const res = await axios.get("/student/attendance");
+      setData(res.data);
+      setError(null);
+    } catch (err) {
+      console.warn("Attendance fetch error", err?.response || err);
+      setError(err?.response?.data?.message || "Failed to load attendance");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  // Derived values
+  const stats = data?.stats || {
+    overallAttendance: 0,
+    daysPresent: 0,
+    totalDays: 0,
+    daysAbsent: 0,
+    tardiness: 0,
+  };
+  const subjects = data?.subjects || [];
+  const events = data?.events || {};
+
+  // Events for selected date (API uses 'YYYY-M-D' format with 1-based month)
   const selectedEvents =
-    events[`${currentYear}-${currentMonth}-${selectedDate}`] || [];
-
-  // Subject data with both percentage and fraction tas ung colors is for progress bar
-  const subjects = [
-    {
-      name: "Earth and Life Science",
-      attended: 7,
-      total: 9,
-      color: "#fb7185",
-      status: "Late",
-    },
-    {
-      name: "Statistics & Probability",
-      attended: 8,
-      total: 9,
-      color: "#7c3aed",
-      status: "Absent",
-    },
-    {
-      name: "Oral Communication",
-      attended: 8,
-      total: 9,
-      color: "#3b82f6",
-      status: "Present",
-    },
-  ];
+    events[`${currentYear}-${currentMonth + 1}-${selectedDate}`] || [];
 
   const monthNames = [
     "January",
@@ -136,6 +133,43 @@ export default function AttendanceDashboard() {
   // layout sizing
   const calendarCellSize = Math.floor((SCREEN_WIDTH - 40 - 6 * 8) / 7); // padding at gaps
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View
+          style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+        >
+          <ActivityIndicator size="large" color="#FF6B9D" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 24,
+          }}
+        >
+          <Text style={{ color: "#dc2626", fontSize: 16, textAlign: "center" }}>
+            {error}
+          </Text>
+          <TouchableOpacity
+            onPress={() => fetchData()}
+            style={{ marginTop: 16 }}
+          >
+            <Text style={{ color: "#2563EB", fontWeight: "600" }}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.mainMenuWrapper}>
@@ -146,8 +180,14 @@ export default function AttendanceDashboard() {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => fetchData(true)}
+          />
+        }
       >
-        {/* Attendance Overview modal */}
+        {/* Attendance Overview */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <CalendarDays color="#db2777" size={24} />
@@ -160,9 +200,8 @@ export default function AttendanceDashboard() {
                 <View style={[styles.iconBox, { backgroundColor: "#fb923c" }]}>
                   <TrendingUp color="#fff" size={24} />
                 </View>
-                <Text style={styles.deltaText}> +6%</Text>
               </View>
-              <Text style={styles.bigNumber}>85%</Text>
+              <Text style={styles.bigNumber}>{stats.overallAttendance}%</Text>
               <Text style={styles.smallMuted}>Overall Attendance</Text>
             </View>
 
@@ -175,9 +214,11 @@ export default function AttendanceDashboard() {
               >
                 <CalendarDays color="#fff" size={24} />
               </View>
-              <Text style={styles.bigNumber}>170</Text>
+              <Text style={styles.bigNumber}>{stats.daysPresent}</Text>
               <Text style={styles.smallMuted}>Days Present</Text>
-              <Text style={styles.smallMutedExtra}>Out of 200 days</Text>
+              <Text style={styles.smallMutedExtra}>
+                Out of {stats.totalDays} days
+              </Text>
             </View>
           </View>
 
@@ -187,12 +228,8 @@ export default function AttendanceDashboard() {
                 <View style={[styles.iconBox, { backgroundColor: "#f87171" }]}>
                   <UserX color="#fff" size={24} />
                 </View>
-                <Text style={[styles.deltaText, { color: "#dc2626" }]}>
-                  {" "}
-                  -2 days
-                </Text>
               </View>
-              <Text style={styles.bigNumber}>30</Text>
+              <Text style={styles.bigNumber}>{stats.daysAbsent}</Text>
               <Text style={styles.smallMuted}>Days Absent</Text>
             </View>
 
@@ -200,13 +237,13 @@ export default function AttendanceDashboard() {
               <View style={[styles.iconBox, { backgroundColor: "#a78bfa" }]}>
                 <Clock color="#fff" size={24} />
               </View>
-              <Text style={styles.bigNumber}>15</Text>
+              <Text style={styles.bigNumber}>{stats.tardiness}</Text>
               <Text style={styles.smallMuted}>Tardiness</Text>
             </View>
           </View>
         </View>
 
-        {/* Calendar modal */}
+        {/* Calendar */}
         <View style={styles.card}>
           <View style={styles.calendarHeader}>
             <Text style={styles.calendarTitle}>
@@ -246,8 +283,9 @@ export default function AttendanceDashboard() {
                 day === todayDate &&
                 currentMonth === todayMonth &&
                 currentYear === todayYear;
-              const hasEvents =
-                day && events[`${currentYear}-${currentMonth}-${day}`];
+              // API uses 1-based month: 'YYYY-M-D'
+              const dateKey = `${currentYear}-${currentMonth + 1}-${day}`;
+              const hasEvents = day && events[dateKey];
 
               return (
                 <TouchableOpacity
@@ -295,13 +333,15 @@ export default function AttendanceDashboard() {
               {selectedEvents.map((event, idx) => {
                 const isCompleted = event.status === "completed";
                 const eventIcon =
-                  event.type === "assignment"
-                    ? <PenSquare color="#fb923c" size={24} />
-                    : event.type === "exam"
-                    ? <ClipboardList color="#fb923c" size={24} />
-                    : event.type === "project"
-                    ? <Book color="#fb923c" size={24} />
-                    : <CalendarDays color="#fb923c" size={24} />;
+                  event.type === "assignment" ? (
+                    <PenSquare color="#fb923c" size={24} />
+                  ) : event.type === "exam" ? (
+                    <ClipboardList color="#fb923c" size={24} />
+                  ) : event.type === "project" ? (
+                    <Book color="#fb923c" size={24} />
+                  ) : (
+                    <CalendarDays color="#fb923c" size={24} />
+                  );
 
                 return (
                   <View
@@ -378,85 +418,101 @@ export default function AttendanceDashboard() {
           </View>
 
           <View style={{ marginTop: 6 }}>
-            {subjects.map((subject, i) => {
-              const absences = subject.total - subject.attended;
-              return (
-                <View key={i} style={{ marginBottom: 16 }}>
-                  <View style={styles.subjectRow}>
-                    <Text style={styles.subjectName}>{subject.name}</Text>
-                    <Text style={styles.subjectStat}>
-                      {showPercentage
-                        ? `${Math.round(
-                            (subject.attended / subject.total) * 100
-                          )}%`
-                        : `${subject.attended}/${subject.total}`}
+            {subjects.length > 0 ? (
+              subjects.map((subject, i) => {
+                const absences = subject.total - subject.attended;
+                return (
+                  <View key={subject.id || i} style={{ marginBottom: 16 }}>
+                    <View style={styles.subjectRow}>
+                      <Text style={styles.subjectName}>{subject.name}</Text>
+                      <Text style={styles.subjectStat}>
+                        {showPercentage
+                          ? `${subject.attendanceRate}%`
+                          : `${subject.attended}/${subject.total}`}
+                      </Text>
+                    </View>
+
+                    <View style={styles.progressBg}>
+                      <View
+                        style={[
+                          styles.progressFill,
+                          {
+                            width: `${subject.attendanceRate}%`,
+                            backgroundColor: subject.color || "#3b82f6",
+                          },
+                        ]}
+                      />
+                    </View>
+
+                    <Text style={styles.absencesText}>
+                      Absences: {absences}
                     </Text>
                   </View>
-
-                  <View style={styles.progressBg}>
-                    <View
-                      style={[
-                        styles.progressFill,
-                        {
-                          width: `${Math.round(
-                            (subject.attended / subject.total) * 100
-                          )}%`,
-                          backgroundColor: subject.color,
-                        },
-                      ]}
-                    />
-                  </View>
-
-                  <Text style={styles.absencesText}>Absences: {absences}</Text>
-                </View>
-              );
-            })}
+                );
+              })
+            ) : (
+              <Text style={{ color: "#6B7280" }}>
+                No subjects enrolled yet.
+              </Text>
+            )}
           </View>
         </View>
 
-        {/* Recent Activity modal */}
+        {/* Recent Activity */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Clock color="#db2777" size={24} />
             <Text style={styles.cardHeaderTitle}>Recent Activity</Text>
           </View>
 
-          <View>
-            {subjects.map((subject, idx) => {
-              const status = subject.status;
-              const bg =
-                status === "Present"
-                  ? "#ecfdf5"
-                  : status === "Absent"
-                  ? "#fee2e2"
-                  : "#fff7ed";
-              const icon =
-                status === "Present" ? <Check color="#16a34a" size={24} /> : status === "Absent" ? <X color="#dc2626" size={24} /> : <Clock color="#f97316" size={24} />;
-              const color =
-                status === "Present"
-                  ? "#16a34a"
-                  : status === "Absent"
-                  ? "#dc2626"
-                  : "#f97316";
+          {subjects.length > 0 ? (
+            <View>
+              {subjects.map((subject, idx) => {
+                const status = subject.status;
+                const bg =
+                  status === "Present"
+                    ? "#ecfdf5"
+                    : status === "Absent"
+                    ? "#fee2e2"
+                    : "#fff7ed";
+                const icon =
+                  status === "Present" ? (
+                    <Check color="#16a34a" size={24} />
+                  ) : status === "Absent" ? (
+                    <X color="#dc2626" size={24} />
+                  ) : (
+                    <Clock color="#f97316" size={24} />
+                  );
+                const color =
+                  status === "Present"
+                    ? "#16a34a"
+                    : status === "Absent"
+                    ? "#dc2626"
+                    : "#f97316";
 
-              return (
-                <View
-                  key={idx}
-                  style={[styles.activityRow, { backgroundColor: "#fafafa" }]}
-                >
-                  <View style={[styles.statusCircle, { backgroundColor: bg }]}>
-                    {icon}
+                return (
+                  <View
+                    key={subject.id || idx}
+                    style={[styles.activityRow, { backgroundColor: "#fafafa" }]}
+                  >
+                    <View
+                      style={[styles.statusCircle, { backgroundColor: bg }]}
+                    >
+                      {icon}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.activityName}>{subject.name}</Text>
+                      <Text style={[styles.activityStatus, { color }]}>
+                        {status}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.activityName}>{subject.name}</Text>
-                    <Text style={[styles.activityStatus, { color }]}>
-                      {status}
-                    </Text>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
+                );
+              })}
+            </View>
+          ) : (
+            <Text style={{ color: "#6B7280" }}>No recent activity.</Text>
+          )}
         </View>
 
         <View style={{ height: 40 }} />
@@ -464,303 +520,3 @@ export default function AttendanceDashboard() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: "#fff7fb", // Same pink background
-  },
-  mainMenuWrapper: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    backgroundColor: "#fff7fb",
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16, // or paddingHorizontal: 16
-    paddingTop: 8,
-    paddingBottom: 100, // Space for bottom navigation
-  },
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 12,
-    alignItems: "center",
-  },
-  avatarLeft: {
-    width: 40,
-    height: 40,
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-    overflow: "hidden",
-  },
-  notificationDot: {
-    width: 8,
-    height: 8,
-    backgroundColor: "#ef4444",
-    borderRadius: 4,
-    position: "absolute",
-    right: -2,
-    top: -2,
-  },
-  bellEmoji: { fontSize: 16 },
-  avatarRight: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#c084fc",
-  },
-
-  /* Dito ung Cards */
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 24,
-    padding: 14,
-    marginBottom: 12,
-    // subtle shadow (Android)
-    elevation: 2,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 10,
-    gap: 8,
-  },
-  cardHeaderTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-  },
-
-  /* overview grid dito */
-  grid2: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 10,
-    marginBottom: 10,
-  },
-  smallCard: {
-    flex: 1,
-    borderRadius: 16,
-    padding: 12,
-    marginRight: 8,
-  },
-  smallCardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  iconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  iconText: { fontSize: 18, color: "#fff" },
-  deltaText: { fontSize: 12, color: "#16a34a", fontWeight: "600" },
-  bigNumber: { fontSize: 28, fontWeight: "800", marginTop: 6 },
-  smallMuted: { fontSize: 13, color: "#6b7280" },
-  smallMutedExtra: { fontSize: 11, color: "#9ca3af" },
-
-  /* calendar dito */
-  calendarHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  calendarTitle: { fontSize: 16, fontWeight: "700", color: "#db2777" },
-  monthBtns: { flexDirection: "row" },
-  monthButton: {
-    width: 36,
-    height: 36,
-    backgroundColor: "#fff0f6",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
-    marginLeft: 8,
-  },
-  monthButtonText: { fontSize: 18 },
-
-  weekRow: {
-    marginTop: 12,
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  weekDayCell: { alignItems: "center" },
-  weekDayText: { fontSize: 12, color: "#6b7280" },
-
-  calendarGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    gap: 8,
-  },
-  calendarCell: {
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 10,
-    marginBottom: 8,
-  },
-  calendarCellEmpty: {
-    opacity: 0,
-  },
-  calendarCellSelected: {
-    backgroundColor: "#fb923c",
-    shadowColor: "#fb923c",
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  calendarCellText: { fontSize: 13, color: "#374151" },
-  calendarCellTextSelected: { color: "#fff", fontWeight: "700" },
-  calendarCellToday: {
-    borderWidth: 2,
-    borderColor: "#fb923c",
-  },
-  calendarCellTextToday: {
-    color: "#fb923c",
-    fontWeight: "700",
-  },
-  eventDot: {
-    position: "absolute",
-    bottom: 4,
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "#fb923c",
-  },
-
-  /* events dito */
-  eventCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fafafa",
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: "#fb923c",
-  },
-  eventCardCompleted: {
-    opacity: 0.7,
-    borderLeftColor: "#10b981",
-  },
-  eventIcon: {
-    fontSize: 24,
-    marginRight: 12,
-  },
-  eventTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#111827",
-    marginBottom: 4,
-  },
-  eventTitleCompleted: {
-    textDecorationLine: "line-through",
-    color: "#6b7280",
-  },
-  eventType: {
-    fontSize: 12,
-    color: "#6b7280",
-    textTransform: "capitalize",
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusPending: {
-    backgroundColor: "#fff7ed",
-  },
-  statusCompleted: {
-    backgroundColor: "#d1fae5",
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#f97316",
-  },
-  statusTextCompleted: {
-    color: "#10b981",
-  },
-
-  /* subjects dito */
-  subjectHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  subjectIconBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
-    backgroundColor: "#fff0f6",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 8,
-  },
-  subjectTitle: { fontSize: 16, fontWeight: "700" },
-
-  toggleTrack: {
-    width: 48,
-    height: 26,
-    borderRadius: 20,
-    padding: 3,
-    justifyContent: "center",
-  },
-  toggleOn: { backgroundColor: "#fb7185" },
-  toggleOff: { backgroundColor: "#e5e7eb" },
-  toggleKnob: {
-    width: 20,
-    height: 20,
-    borderRadius: 12,
-    backgroundColor: "#fff",
-    elevation: 2,
-  },
-  toggleKnobOn: { alignSelf: "flex-end" },
-  toggleKnobOff: { alignSelf: "flex-start" },
-
-  subjectRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  subjectName: { fontSize: 14, fontWeight: "600", color: "#374151" },
-  subjectStat: { fontSize: 13, fontWeight: "700" },
-
-  progressBg: {
-    height: 10,
-    backgroundColor: "#f3f4f6",
-    borderRadius: 8,
-    overflow: "hidden",
-    marginTop: 8,
-  },
-  progressFill: {
-    height: 10,
-    borderRadius: 8,
-  },
-  absencesText: { fontSize: 12, color: "#6b7280", marginTop: 6 },
-
-  /* recent activity dito */
-  activityRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 10,
-    borderRadius: 12,
-    marginBottom: 8,
-  },
-  statusCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  activityName: { fontSize: 13, fontWeight: "700", color: "#111827" },
-  activityStatus: { fontSize: 12, fontWeight: "700" },
-});

@@ -1,13 +1,14 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "expo-router";
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   ScrollView,
   StyleSheet,
   Modal,
+  ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Mainmenu from "../components/mainMenu";
@@ -15,137 +16,54 @@ import {
   ShieldAlert,
   ShieldHalf,
   ShieldCheck,
-  Search,
   Book,
   HelpCircle,
   TrendingUp,
   Calendar,
   Lightbulb,
-  User,
   ChevronDown,
   ChevronUp,
   ArrowLeft,
+  RefreshCw,
 } from "lucide-react-native";
+import axios from "axios";
 
 export default function SubjectRisk() {
   const router = useRouter();
-  const [searchQuery, setSearchQuery] = useState("");
   const [selectedFilter, setSelectedFilter] = useState("All");
   const [showAll, setShowAll] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState(null);
 
-  const allSubjects = [
-    {
-      name: "Earth & Life Science",
-      instructor: "Prof. Felix Miravillo",
-      grade: 62,
-      risk: "High Risk",
-      courseProgress: 55,
-      trend: "Improving",
-      deadline: "Nov 10, 2024",
-      advice: "Maintain study habit",
-    },
-    {
-      name: "Statistics & Probability",
-      instructor: "Prof. Felix Miravillo",
-      grade: 75,
-      risk: "Medium Risk",
-      courseProgress: 68,
-      trend: "Stable",
-      deadline: "Nov 15, 2024",
-      advice: "Review statistical concepts",
-    },
-    {
-      name: "Oral Communication",
-      instructor: "Prof. Danny D.T Dinglasa Jr.",
-      grade: 92,
-      risk: "Low Risk",
-      courseProgress: 85,
-      trend: "Excellent",
-      deadline: "Nov 20, 2024",
-      advice: "Keep up the great work",
-    },
-    {
-      name: "Practical Research 1",
-      instructor: "Ms. Madrazo",
-      grade: 92,
-      risk: "Low Risk",
-      courseProgress: 90,
-      trend: "Excellent",
-      deadline: "Nov 25, 2024",
-      advice: "Continue consistent effort",
-    },
-    {
-      name: "PE HEALTH",
-      instructor: "Mrs. Dela Cruz",
-      grade: 95,
-      risk: "Low Risk",
-      courseProgress: 92,
-      trend: "Outstanding",
-      deadline: "Nov 12, 2024",
-      advice: "Maintain active participation",
-    },
-    {
-      name: "Personal Development",
-      instructor: "Gng. Reyes",
-      grade: 91,
-      risk: "Low Risk",
-      courseProgress: 88,
-      trend: "Excellent",
-      deadline: "Nov 18, 2024",
-      advice: "Keep up good work",
-    },
-    {
-      name: "Philosophy",
-      instructor: "Mr. Legazpi",
-      grade: 86,
-      risk: "Low Risk",
-      courseProgress: 80,
-      trend: "Good",
-      deadline: "Nov 22, 2024",
-      advice: "Continue studying regularly",
-    },
-    {
-      name: "Entrepreneurship",
-      instructor: "Mr. Reyes",
-      grade: 88,
-      risk: "Low Risk",
-      courseProgress: 82,
-      trend: "Good",
-      deadline: "Nov 14, 2024",
-      advice: "Maintain consistent effort",
-    },
-    {
-      name: "Basic Calculus",
-      instructor: "Mrs. Santos",
-      grade: 78,
-      risk: "Medium Risk",
-      courseProgress: 70,
-      trend: "Needs Attention",
-      deadline: "Nov 16, 2024",
-      advice: "Practice more problems",
-    },
-    {
-      name: "Filipino sa Piling Larang",
-      instructor: "Mr. Lopez",
-      grade: 75,
-      risk: "Medium Risk",
-      courseProgress: 65,
-      trend: "Stable",
-      deadline: "Nov 19, 2024",
-      advice: "Review course materials",
-    },
-    {
-      name: "UCSP",
-      instructor: "Mr. Ramos",
-      grade: 70,
-      risk: "Medium Risk",
-      courseProgress: 62,
-      trend: "Needs Improvement",
-      deadline: "Nov 17, 2024",
-      advice: "Seek additional help",
-    },
-  ];
+  // API State
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
+
+  const fetchData = async (isRefresh = false) => {
+    try {
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
+      const res = await axios.get("/student/subjects-at-risk");
+      setData(res.data);
+      setError(null);
+    } catch (err) {
+      console.warn("Subjects at risk fetch error", err?.response || err);
+      setError(
+        err?.response?.data?.message || "Failed to load subjects at risk"
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const stats = data?.stats || { highRisk: 0, mediumRisk: 0, lowRisk: 0 };
+  const allSubjects = data?.subjects || [];
 
   const getRiskColor = (risk) => {
     if (risk === "High Risk") return "#fb7185";
@@ -159,48 +77,37 @@ export default function SubjectRisk() {
     return "#ecfdf5";
   };
 
-  const getRiskLabel = (grade) => {
-    if (grade >= 80) return "Low Risk";
-    if (grade >= 70) return "Medium Risk";
-    return "High Risk";
+  const getTrendColor = (trend) => {
+    // Normalize trend to lowercase for comparison (matches backend format)
+    const t = trend?.toLowerCase() || "";
+    if (t === "improving") return "#10b981";
+    if (t === "stable" || t === "new") return "#fb923c";
+    if (t === "declining") return "#fb7185";
+    return "#6b7280"; // default gray
   };
 
-  const getTrendColor = (trend) => {
-    if (
-      trend === "Improving" ||
-      trend === "Excellent" ||
-      trend === "Outstanding"
-    )
-      return "#10b981";
-    if (trend === "Stable" || trend === "Good") return "#fb923c";
-    return "#fb7185";
+  // Helper to get readable trend label
+  const getTrendLabel = (trend) => {
+    const t = trend?.toLowerCase() || "";
+    if (t === "improving") return "Improving";
+    if (t === "stable") return "Stable";
+    if (t === "declining") return "Declining";
+    if (t === "new") return "New";
+    return trend || "N/A";
   };
 
   const filteredSubjects = allSubjects.filter((subject) => {
-    const matchesSearch =
-      subject.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      subject.instructor.toLowerCase().includes(searchQuery.toLowerCase());
-
-    if (selectedFilter === "All") return matchesSearch;
-    return matchesSearch && subject.risk === selectedFilter;
+    if (selectedFilter === "All") return true;
+    return subject.risk === selectedFilter;
   });
 
   const displayedSubjects = showAll
     ? filteredSubjects
     : filteredSubjects.slice(0, 3);
 
-  const highRiskCount = allSubjects.filter(
-    (s) => s.risk === "High Risk"
-  ).length;
-  const mediumRiskCount = allSubjects.filter(
-    (s) => s.risk === "Medium Risk"
-  ).length;
-  const lowRiskCount = allSubjects.filter((s) => s.risk === "Low Risk").length;
-
   const SubjectCard = ({ subject }) => {
-    const risk = getRiskLabel(subject.grade);
-    const riskColor = getRiskColor(risk);
-    const riskBgColor = getRiskBgColor(risk);
+    const riskColor = getRiskColor(subject.risk);
+    const riskBgColor = getRiskBgColor(subject.risk);
 
     return (
       <TouchableOpacity
@@ -213,13 +120,13 @@ export default function SubjectRisk() {
             <View
               style={[styles.subjectIcon, { backgroundColor: riskBgColor }]}
             >
-              {risk === "High Risk" && (
+              {subject.risk === "High Risk" && (
                 <ShieldAlert color={riskColor} size={18} />
               )}
-              {risk === "Low Risk" && (
+              {subject.risk === "Low Risk" && (
                 <ShieldCheck color={riskColor} size={18} />
               )}
-              {risk === "Medium Risk" && (
+              {subject.risk === "Medium Risk" && (
                 <ShieldHalf color={riskColor} size={18} />
               )}
             </View>
@@ -230,14 +137,16 @@ export default function SubjectRisk() {
           </View>
 
           <View style={[styles.riskBadge, { backgroundColor: riskBgColor }]}>
-            <Text style={[styles.riskLabel, { color: riskColor }]}>{risk}</Text>
+            <Text style={[styles.riskLabel, { color: riskColor }]}>
+              {subject.risk}
+            </Text>
           </View>
         </View>
 
         <View style={styles.gradeRow}>
           <Text style={styles.gradeLabel}>Current Grade</Text>
           <Text style={[styles.grade, { color: riskColor }]}>
-            {subject.grade}%
+            {subject.grade !== null ? `${subject.grade}%` : "N/A"}
           </Text>
         </View>
 
@@ -245,7 +154,7 @@ export default function SubjectRisk() {
           <View
             style={[
               styles.progressFill,
-              { width: `${subject.grade}%`, backgroundColor: riskColor },
+              { width: `${subject.grade ?? 0}%`, backgroundColor: riskColor },
             ]}
           />
         </View>
@@ -256,11 +165,11 @@ export default function SubjectRisk() {
   const SubjectDetailModal = () => {
     if (!selectedSubject) return null;
 
-    const risk = getRiskLabel(selectedSubject.grade);
-    const riskColor = getRiskColor(risk);
-    const riskBgColor = getRiskBgColor(risk);
+    const riskColor = getRiskColor(selectedSubject.risk);
+    const riskBgColor = getRiskBgColor(selectedSubject.risk);
     const trendColor = getTrendColor(selectedSubject.trend);
-    const isFailing = selectedSubject.grade < 75;
+    const isFailing =
+      selectedSubject.grade !== null && selectedSubject.grade < 75;
 
     return (
       <Modal
@@ -295,7 +204,7 @@ export default function SubjectRisk() {
                   ]}
                 >
                   <Text style={[styles.detailRiskText, { color: riskColor }]}>
-                    {risk}
+                    {selectedSubject.risk}
                   </Text>
                 </View>
 
@@ -311,7 +220,9 @@ export default function SubjectRisk() {
                     <Text
                       style={[styles.gradeCircleText, { color: riskColor }]}
                     >
-                      {selectedSubject.grade}%
+                      {selectedSubject.grade !== null
+                        ? `${selectedSubject.grade}%`
+                        : "N/A"}
                     </Text>
                   </View>
                 </View>
@@ -323,14 +234,14 @@ export default function SubjectRisk() {
                     style={[
                       styles.detailProgressFill,
                       {
-                        width: `${selectedSubject.courseProgress}%`,
+                        width: `${selectedSubject.courseProgress ?? 0}%`,
                         backgroundColor: riskColor,
                       },
                     ]}
                   />
                 </View>
                 <Text style={styles.progressPercentage}>
-                  {selectedSubject.courseProgress}%
+                  {selectedSubject.courseProgress ?? 0}%
                 </Text>
 
                 {/* Info Column */}
@@ -343,7 +254,7 @@ export default function SubjectRisk() {
                       <View style={styles.infoTextContainer}>
                         <Text style={styles.infoLabel}>Trend</Text>
                         <Text style={[styles.infoValue, { color: trendColor }]}>
-                          {selectedSubject.trend}
+                          {getTrendLabel(selectedSubject.trend)}
                         </Text>
                       </View>
                     </View>
@@ -355,9 +266,11 @@ export default function SubjectRisk() {
                     <View style={styles.infoRow}>
                       <Calendar size={20} color="#fb923c" />
                       <View style={styles.infoTextContainer}>
-                        <Text style={styles.infoLabel}>Deadline</Text>
+                        <Text style={styles.infoLabel}>Attendance</Text>
                         <Text style={styles.infoValue}>
-                          {selectedSubject.deadline}
+                          {selectedSubject.attendanceRate}% (
+                          {selectedSubject.presentDays}/
+                          {selectedSubject.totalClasses} days)
                         </Text>
                       </View>
                     </View>
@@ -377,6 +290,25 @@ export default function SubjectRisk() {
                     </View>
                   </View>
                 </View>
+
+                {/* Risk Reasons */}
+                {selectedSubject.riskReasons &&
+                  selectedSubject.riskReasons.length > 0 && (
+                    <View style={styles.riskReasonsContainer}>
+                      <Text style={styles.riskReasonsTitle}>Risk Factors:</Text>
+                      {selectedSubject.riskReasons.map((reason, idx) => (
+                        <View key={idx} style={styles.riskReasonItem}>
+                          <View
+                            style={[
+                              styles.riskReasonDot,
+                              { backgroundColor: riskColor },
+                            ]}
+                          />
+                          <Text style={styles.riskReasonText}>{reason}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
               </View>
 
               {/* Warning Card - Only show if failing */}
@@ -412,8 +344,7 @@ export default function SubjectRisk() {
                     <View style={styles.actionItem}>
                       <Text style={styles.actionNumber}>3</Text>
                       <Text style={styles.actionText}>
-                        Complete the upcoming project by{" "}
-                        {selectedSubject.deadline} to boost your grade
+                        Complete any missing assignments to boost your grade
                       </Text>
                     </View>
                   </View>
@@ -441,6 +372,29 @@ export default function SubjectRisk() {
     );
   };
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#FF6B9D" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity onPress={() => fetchData()} style={styles.retryBtn}>
+            <Text style={styles.retryText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.mainMenuWrapper}>
@@ -450,13 +404,31 @@ export default function SubjectRisk() {
       <ScrollView
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => fetchData(true)}
+          />
+        }
       >
+        {/* Header with Refresh */}
+        <View style={styles.headerRow}>
+          <View style={styles.headerLeft}>
+            <ShieldAlert color="#DB2777" size={24} />
+            <Text style={styles.headerTitle}>Subjects at Risk</Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => fetchData(true)}
+            style={styles.refreshBtn}
+          >
+            <RefreshCw color="#6B7280" size={18} />
+          </TouchableOpacity>
+        </View>
+
         {/* Stats Overview */}
         <View style={styles.statsCard}>
           <View style={styles.statsHeader}>
-            <Text style={styles.statsTitle}>
-              <ShieldAlert size={16} color="#333" /> Risk Overview
-            </Text>
+            <Text style={styles.statsTitle}>Risk Overview</Text>
           </View>
 
           <View style={styles.statsGrid}>
@@ -466,7 +438,7 @@ export default function SubjectRisk() {
               >
                 <ShieldAlert size={18} color="#fff" />
               </View>
-              <Text style={styles.statNumber}>{highRiskCount}</Text>
+              <Text style={styles.statNumber}>{stats.highRisk}</Text>
               <Text style={styles.statLabel}>High Risk</Text>
             </View>
 
@@ -476,7 +448,7 @@ export default function SubjectRisk() {
               >
                 <ShieldHalf size={18} color="#fff" />
               </View>
-              <Text style={styles.statNumber}>{mediumRiskCount}</Text>
+              <Text style={styles.statNumber}>{stats.mediumRisk}</Text>
               <Text style={styles.statLabel}>Medium Risk</Text>
             </View>
 
@@ -486,11 +458,12 @@ export default function SubjectRisk() {
               >
                 <ShieldCheck size={18} color="#fff" />
               </View>
-              <Text style={styles.statNumber}>{lowRiskCount}</Text>
+              <Text style={styles.statNumber}>{stats.lowRisk}</Text>
               <Text style={styles.statLabel}>Low Risk</Text>
             </View>
           </View>
         </View>
+
         {/* Subjects Section */}
         <View style={styles.subjectsCard}>
           <View style={styles.subjectsHeader}>
@@ -536,7 +509,7 @@ export default function SubjectRisk() {
                     : styles.filterText
                 }
               >
-                High ({highRiskCount})
+                High ({stats.highRisk})
               </Text>
             </TouchableOpacity>
 
@@ -554,7 +527,7 @@ export default function SubjectRisk() {
                     : styles.filterText
                 }
               >
-                Medium ({mediumRiskCount})
+                Medium ({stats.mediumRisk})
               </Text>
             </TouchableOpacity>
 
@@ -572,15 +545,26 @@ export default function SubjectRisk() {
                     : styles.filterText
                 }
               >
-                Low ({lowRiskCount})
+                Low ({stats.lowRisk})
               </Text>
             </TouchableOpacity>
           </View>
 
           {/* Subject Cards */}
-          {displayedSubjects.map((subject, idx) => (
-            <SubjectCard key={idx} subject={subject} />
-          ))}
+          {displayedSubjects.length > 0 ? (
+            displayedSubjects.map((subject) => (
+              <SubjectCard key={subject.id} subject={subject} />
+            ))
+          ) : (
+            <View style={styles.emptyState}>
+              <ShieldCheck color="#10b981" size={48} />
+              <Text style={styles.emptyStateText}>
+                {selectedFilter === "All"
+                  ? "No subjects enrolled yet."
+                  : `No ${selectedFilter.toLowerCase()} subjects.`}
+              </Text>
+            </View>
+          )}
 
           {/* View More */}
           {filteredSubjects.length > 3 && (
@@ -627,55 +611,50 @@ export default function SubjectRisk() {
 }
 
 const styles = StyleSheet.create({
-  safe: {
+  safe: { flex: 1, backgroundColor: "#fff7fb" },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  errorContainer: {
     flex: 1,
-    backgroundColor: "#fff7fb", // Same pink background
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
   },
+  errorText: {
+    color: "#DC2626",
+    fontSize: 16,
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  retryBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: "#2563EB",
+    borderRadius: 8,
+  },
+  retryText: { color: "#FFF", fontWeight: "600" },
   mainMenuWrapper: {
     paddingHorizontal: 16,
     paddingTop: 8,
     backgroundColor: "#fff7fb",
   },
-  container: {
-    padding: 16,
-    paddingBottom: 40,
-  },
+  container: { padding: 16, paddingBottom: 40 },
 
-  /* Header */
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 12,
     alignItems: "center",
+    marginBottom: 16,
   },
-  avatarLeft: {
-    width: 40,
-    height: 40,
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-    overflow: "hidden",
-  },
-  notificationDot: {
-    width: 8,
-    height: 8,
-    backgroundColor: "#ef4444",
-    borderRadius: 4,
-    position: "absolute",
-    right: -2,
-    top: -2,
-  },
-  bellEmoji: { fontSize: 16 },
-  avatarRight: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#c084fc",
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
+  headerTitle: { fontSize: 22, fontWeight: "700", color: "#111827" },
+  refreshBtn: {
+    padding: 8,
+    backgroundColor: "#FFF",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
   },
 
-  /* Stats Card */
   statsCard: {
     backgroundColor: "#fff",
     borderRadius: 24,
@@ -683,23 +662,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     elevation: 2,
   },
-  statsHeader: {
-    marginBottom: 12,
-  },
-  statsTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  statsGrid: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  statBox: {
-    flex: 1,
-    borderRadius: 16,
-    padding: 12,
-    alignItems: "center",
-  },
+  statsHeader: { marginBottom: 12 },
+  statsTitle: { fontSize: 16, fontWeight: "700" },
+  statsGrid: { flexDirection: "row", gap: 10 },
+  statBox: { flex: 1, borderRadius: 16, padding: 12, alignItems: "center" },
   statIconBox: {
     width: 40,
     height: 40,
@@ -708,46 +674,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 8,
   },
-  statIcon: {
-    fontSize: 18,
-  },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#111827",
-  },
-  statLabel: {
-    fontSize: 11,
-    color: "#6b7280",
-    marginTop: 4,
-  },
+  statNumber: { fontSize: 24, fontWeight: "800", color: "#111827" },
+  statLabel: { fontSize: 11, color: "#6b7280", marginTop: 4 },
 
-  /* Search Card */
-  searchCard: {
-    backgroundColor: "#fff",
-    borderRadius: 24,
-    padding: 14,
-    marginBottom: 12,
-    elevation: 2,
-  },
-  searchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f9fafb",
-    padding: 12,
-    borderRadius: 12,
-  },
-  searchIcon: {
-    fontSize: 18,
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: 8,
-    fontSize: 14,
-    color: "#111827",
-  },
-
-  /* Subjects Card */
   subjectsCard: {
     backgroundColor: "#fff",
     borderRadius: 24,
@@ -770,12 +699,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 8,
   },
-  subjectsTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-  },
+  subjectsTitle: { fontSize: 16, fontWeight: "700" },
 
-  /* Filters */
   filterRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -788,21 +713,10 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: "#f3f4f6",
   },
-  filterButtonActive: {
-    backgroundColor: "#fb923c",
-  },
-  filterText: {
-    color: "#6b7280",
-    fontWeight: "600",
-    fontSize: 12,
-  },
-  filterTextActive: {
-    color: "#fff",
-    fontWeight: "600",
-    fontSize: 12,
-  },
+  filterButtonActive: { backgroundColor: "#fb923c" },
+  filterText: { color: "#6b7280", fontWeight: "600", fontSize: 12 },
+  filterTextActive: { color: "#fff", fontWeight: "600", fontSize: 12 },
 
-  /* Subject Card */
   card: {
     backgroundColor: "#fafafa",
     padding: 14,
@@ -834,45 +748,33 @@ const styles = StyleSheet.create({
     color: "#111827",
     marginBottom: 2,
   },
-  instructor: {
-    fontSize: 12,
-    color: "#6b7280",
-  },
-  riskBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  riskLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-  },
+  instructor: { fontSize: 12, color: "#6b7280" },
+  riskBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  riskLabel: { fontSize: 11, fontWeight: "700" },
   gradeRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 8,
   },
-  gradeLabel: {
-    fontSize: 13,
-    color: "#6b7280",
-  },
-  grade: {
-    fontWeight: "700",
-    fontSize: 16,
-  },
+  gradeLabel: { fontSize: 13, color: "#6b7280" },
+  grade: { fontWeight: "700", fontSize: 16 },
   progressBar: {
     height: 10,
     backgroundColor: "#f3f4f6",
     borderRadius: 8,
     overflow: "hidden",
   },
-  progressFill: {
-    height: "100%",
-    borderRadius: 8,
+  progressFill: { height: "100%", borderRadius: 8 },
+
+  emptyState: { alignItems: "center", paddingVertical: 32 },
+  emptyStateText: {
+    fontSize: 14,
+    color: "#6B7280",
+    marginTop: 12,
+    textAlign: "center",
   },
 
-  /* View More Button */
   viewMoreButton: {
     flexDirection: "row",
     justifyContent: "center",
@@ -886,12 +788,7 @@ const styles = StyleSheet.create({
     color: "#fb923c",
     marginRight: 6,
   },
-  chevron: {
-    fontSize: 12,
-    color: "#fb923c",
-  },
 
-  /* Help Card */
   helpCard: {
     backgroundColor: "#fff",
     borderRadius: 24,
@@ -910,25 +807,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 12,
   },
-  helpIcon: {
-    fontSize: 24,
-  },
-  helpContent: {
-    flex: 1,
-  },
+  helpContent: { flex: 1 },
   helpTitle: {
     fontSize: 16,
     fontWeight: "700",
     marginBottom: 4,
     color: "#111827",
   },
-  helpText: {
-    fontSize: 13,
-    color: "#6b7280",
-    lineHeight: 18,
-  },
+  helpText: { fontSize: 13, color: "#6b7280", lineHeight: 18 },
 
-  /* Modal Styles */
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
@@ -941,11 +828,7 @@ const styles = StyleSheet.create({
     maxHeight: "90%",
     padding: 16,
   },
-  backButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 16,
-  },
+  backButton: { flexDirection: "row", alignItems: "center", marginBottom: 16 },
   backIconCircle: {
     width: 32,
     height: 32,
@@ -955,18 +838,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 8,
   },
-  backArrow: {
-    fontSize: 24,
-    color: "#333",
-    fontWeight: "700",
-  },
-  backText: {
-    fontSize: 14,
-    color: "#333",
-    fontWeight: "600",
-  },
+  backText: { fontSize: 14, color: "#333", fontWeight: "600" },
 
-  /* Detail Card */
   detailCard: {
     backgroundColor: "#fff",
     borderRadius: 24,
@@ -987,19 +860,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 8,
   },
-  detailRiskText: {
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  detailInstructor: {
-    fontSize: 14,
-    color: "#6b7280",
-    marginBottom: 16,
-  },
-  gradeCircleContainer: {
-    alignItems: "center",
-    marginVertical: 16,
-  },
+  detailRiskText: { fontSize: 12, fontWeight: "700" },
+  detailInstructor: { fontSize: 14, color: "#6b7280", marginBottom: 16 },
+  gradeCircleContainer: { alignItems: "center", marginVertical: 16 },
   gradeCircle: {
     width: 100,
     height: 100,
@@ -1008,25 +871,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  gradeCircleText: {
-    fontSize: 28,
-    fontWeight: "800",
-  },
-  progressLabel: {
-    fontSize: 14,
-    color: "#6b7280",
-    marginBottom: 8,
-  },
+  gradeCircleText: { fontSize: 28, fontWeight: "800" },
+  progressLabel: { fontSize: 14, color: "#6b7280", marginBottom: 8 },
   detailProgressBar: {
     height: 12,
     backgroundColor: "#f3f4f6",
     borderRadius: 8,
     overflow: "hidden",
   },
-  detailProgressFill: {
-    height: "100%",
-    borderRadius: 8,
-  },
+  detailProgressFill: { height: "100%", borderRadius: 8 },
   progressPercentage: {
     fontSize: 12,
     color: "#6b7280",
@@ -1034,35 +887,33 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
-  /* Info Column */
-  infoColumn: {
+  infoColumn: { marginTop: 16 },
+  infoBox: { padding: 14, borderRadius: 12, marginBottom: 10 },
+  infoRow: { flexDirection: "row", alignItems: "center" },
+  infoTextContainer: { marginLeft: 12, flex: 1 },
+  infoLabel: { fontSize: 12, color: "#6b7280", marginBottom: 4 },
+  infoValue: { fontSize: 14, fontWeight: "700", color: "#111827" },
+
+  riskReasonsContainer: {
     marginTop: 16,
-  },
-  infoBox: {
     padding: 14,
+    backgroundColor: "#FEF2F2",
     borderRadius: 12,
-    marginBottom: 10,
   },
-  infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  infoTextContainer: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  infoLabel: {
-    fontSize: 12,
-    color: "#6b7280",
-    marginBottom: 4,
-  },
-  infoValue: {
+  riskReasonsTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#111827",
+    color: "#991B1B",
+    marginBottom: 8,
   },
+  riskReasonItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  riskReasonDot: { width: 6, height: 6, borderRadius: 3, marginRight: 8 },
+  riskReasonText: { fontSize: 13, color: "#7F1D1D", flex: 1 },
 
-  /* Warning Card */
   warningCard: {
     backgroundColor: "#fff",
     borderRadius: 24,
@@ -1095,13 +946,8 @@ const styles = StyleSheet.create({
     color: "#111827",
     marginBottom: 12,
   },
-  actionList: {
-    marginBottom: 16,
-  },
-  actionItem: {
-    flexDirection: "row",
-    marginBottom: 12,
-  },
+  actionList: { marginBottom: 16 },
+  actionItem: { flexDirection: "row", marginBottom: 12 },
   actionNumber: {
     width: 24,
     height: 24,
@@ -1114,12 +960,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginRight: 10,
   },
-  actionText: {
-    flex: 1,
-    fontSize: 13,
-    color: "#374151",
-    lineHeight: 20,
-  },
+  actionText: { flex: 1, fontSize: 13, color: "#374151", lineHeight: 20 },
   interventionButton: {
     backgroundColor: "#fb7185",
     paddingVertical: 14,
@@ -1127,61 +968,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 10,
   },
-  interventionButtonText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  contactButton: {
-    backgroundColor: "#fff",
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: "#fb7185",
-  },
-  contactButtonText: {
-    color: "#fb7185",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-
-  /* Resource Cards */
-  resourceCard: {
-    backgroundColor: "#fff",
-    borderRadius: 24,
-    padding: 16,
-    marginBottom: 12,
-    elevation: 2,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  resourceIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: "#f3f4f6",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  resourceContent: {
-    flex: 1,
-  },
-  resourceTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 4,
-  },
-  resourceDesc: {
-    fontSize: 12,
-    color: "#6b7280",
-    marginBottom: 6,
-  },
-  resourceLink: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#fb923c",
-  },
+  interventionButtonText: { color: "#fff", fontSize: 14, fontWeight: "700" },
 });

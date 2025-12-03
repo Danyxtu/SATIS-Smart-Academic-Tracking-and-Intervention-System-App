@@ -12,7 +12,7 @@ export default {
       resizeMode: "contain",
       backgroundColor: "#ffffff",
     },
-    plugins: "expo-secure-store",
+    plugins: ["expo-secure-store"],
     ios: {
       supportsTablet: true,
     },
@@ -26,7 +26,9 @@ export default {
       favicon: "./assets/favicon.png",
     },
     extra: {
-      API_URL: process.env.APP_URL,
+      // Allow overriding via APP_URL env var (useful for CI/dev overrides).
+      // If not provided, default to the laptop LAN IP used for device testing.
+      API_URL: process.env.APP_URL || "http://10.238.145.104:8000",
     },
   },
 };

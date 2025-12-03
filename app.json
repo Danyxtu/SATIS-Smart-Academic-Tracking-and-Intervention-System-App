@@ -9,7 +9,7 @@
 
     "scheme": "your-app-scheme",
 
-    "newArchEnabled": true,
+    "newArchEnabled": false,
 
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -35,7 +35,7 @@
     },
 
     "extra": {
-      "API_URL": "http://172.23.193.104:8000"
+      "API_URL": "http://192.168.0.109:8000"
     },
 
     "plugins": ["expo-secure-store"]

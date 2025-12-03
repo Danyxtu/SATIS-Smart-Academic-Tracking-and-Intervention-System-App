@@ -7,48 +7,116 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Alert,
+  ActivityIndicator,
+  Image,
 } from "react-native";
-import { User, Lock } from "lucide-react-native";
+import { User, Lock, Eye, EyeClosed } from "lucide-react-native";
 import { useAuth } from "../context/AuthContext";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [remember, setRemember] = useState(false);
   const { login } = useAuth();
+
+  const handleLogin = async () => {
+    if (!email || !password) {
+      setError("Please enter email and password.");
+      return;
+    }
+
+    setError("");
+    setLoading(true);
+    const res = await login(email, password);
+    setLoading(false);
+
+    if (!res.success) {
+      setError(res.message || "Please check your credentials.");
+      return;
+    }
+    // on success, AuthProvider will update user and the layout will redirect
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
+        <Image
+          source={require("../../assets/school.jpg")}
+          style={styles.logo}
+          resizeMode="cover"
+        />
+
         <Text style={styles.welcomeText}>Welcome Back</Text>
         <Text style={styles.subHeaderText}>Sign in to continue</Text>
 
-        <View style={styles.inputContainer}>
-          <User size={20} color="#666" style={styles.inputIcon} />
-          <TextInput
-            style={styles.input}
-            placeholder="Email or Username"
-            placeholderTextColor="#999"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={email}
-            onChangeText={setEmail}
-          />
+        <View style={styles.field}>
+          <Text style={styles.label}>Email</Text>
+          <View style={styles.inputContainer}>
+            <User size={20} color="#666" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your email"
+              placeholderTextColor="#999"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              value={email}
+              onChangeText={setEmail}
+            />
+          </View>
         </View>
 
-        <View style={styles.inputContainer}>
-          <Lock size={20} color="#666" style={styles.inputIcon} />
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor="#999"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-          />
+        <View style={styles.field}>
+          <Text style={styles.label}>Password</Text>
+          <View style={styles.inputContainer}>
+            <Lock size={20} color="#666" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your password"
+              placeholderTextColor="#999"
+              secureTextEntry={!showPassword}
+              value={password}
+              onChangeText={setPassword}
+            />
+            <TouchableOpacity
+              onPress={() => setShowPassword(!showPassword)}
+              style={styles.showButton}
+            >
+              {showPassword ? (
+                <Eye size={18} color="#666" />
+              ) : (
+                <EyeClosed size={18} color="#666" />
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+        <View style={styles.rememberRow}>
+          <TouchableOpacity
+            style={styles.checkbox}
+            onPress={() => setRemember(!remember)}
+          >
+            {remember ? <View style={styles.checkboxInner} /> : null}
+          </TouchableOpacity>
+          <Text style={styles.rememberText}>Remember me</Text>
         </View>
 
-        <TouchableOpacity style={styles.loginButton} onPress={() => login()}>
-          <Text style={styles.loginButtonText}>Login</Text>
+        <TouchableOpacity
+          style={[
+            styles.loginButton,
+            loading ? styles.loginButtonDisabled : null,
+          ]}
+          onPress={handleLogin}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.loginButtonText}>Sign in</Text>
+          )}
         </TouchableOpacity>
 
         {/* Optional: Forgot Password / Sign Up links */}
@@ -59,7 +127,6 @@ const Login = () => {
     </SafeAreaView>
   );
 };
-
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -128,6 +195,62 @@ const styles = StyleSheet.create({
   forgotPasswordText: {
     color: "#007AFF",
     fontSize: 14,
+  },
+  errorText: {
+    color: "#dc2626",
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  loginButtonDisabled: {
+    opacity: 0.7,
+  },
+  logo: {
+    width: 120,
+    height: 120,
+    borderRadius: 20,
+    marginBottom: 20,
+    backgroundColor: "#E5E7EB",
+  },
+  field: {
+    width: "100%",
+    maxWidth: 350,
+    marginBottom: 10,
+  },
+  label: {
+    fontSize: 14,
+    color: "#374151",
+    fontWeight: "600",
+    marginBottom: 6,
+  },
+  showButton: {
+    padding: 8,
+  },
+  rememberRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
+    maxWidth: 350,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 8,
+  },
+  checkboxInner: {
+    width: 12,
+    height: 12,
+    backgroundColor: "#007AFF",
+    borderRadius: 2,
+  },
+  rememberText: {
+    color: "#6b7280",
   },
 });
 

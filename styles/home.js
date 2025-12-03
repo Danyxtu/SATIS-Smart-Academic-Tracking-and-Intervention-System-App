@@ -1,0 +1,205 @@
+import { StyleSheet } from "react-native";
+
+export default StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: "#FDF2F8",
+  },
+  mainMenuWrapper: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    backgroundColor: "#FDF2F8",
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 100,
+  },
+  welcomeCard: {
+    borderRadius: 20,
+    marginBottom: 20,
+    overflow: "hidden",
+    height: 160,
+    justifyContent: "flex-end",
+  },
+  welcomeCardImage: {
+    borderRadius: 20,
+  },
+  welcomeOverlay: {
+    padding: 20,
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+  },
+  welcomeTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "#FFFFFF",
+    marginBottom: 4,
+  },
+  welcomeSubtitle: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.9)",
+  },
+  statsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  statCard: {
+    width: "48%",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 16,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+    marginBottom: 12,
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: "#111827",
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: "#6B7280",
+    textAlign: "center",
+    fontWeight: "500",
+  },
+  performanceCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  performanceHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  performanceTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111827",
+    marginLeft: 8,
+  },
+  performanceItem: {
+    marginBottom: 14,
+  },
+  performanceLabel: {
+    fontSize: 13,
+    color: "#374151",
+    marginBottom: 6,
+    fontWeight: "500",
+  },
+  progressBar: {
+    height: 10,
+    backgroundColor: "#E5E7EB",
+    borderRadius: 5,
+    overflow: "hidden",
+  },
+  progress: {
+    height: "100%",
+    backgroundColor: "#DB2777",
+    borderRadius: 5,
+  },
+  progressText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#111827",
+    marginTop: 4,
+    textAlign: "right",
+  },
+  // Grade Trend Section
+  trendSection: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  trendHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 4,
+  },
+  trendTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#E91E63",
+  },
+  trendSubtitle: {
+    fontSize: 11,
+    color: "#6B7280",
+    marginBottom: 10,
+  },
+  // Activity Card
+  activityCard: {
+    backgroundColor: "white",
+    borderRadius: 20,
+    padding: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  activityHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  activityTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#1f2937",
+    marginLeft: 8,
+  },
+  activityItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  activityIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#FCE4EC",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 16,
+  },
+  activityText: {
+    flex: 1,
+    fontSize: 14,
+    color: "#374151",
+  },
+  activityTime: {
+    fontSize: 12,
+    color: "#9CA3AF",
+    marginTop: 4,
+  },
+  // Center utility
+  center: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+});

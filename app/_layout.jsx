@@ -13,16 +13,24 @@ function RootLayoutNav() {
     if (loading) return; // Don't redirect until auth state is loaded
 
     const inTabsGroup = segments[0] === "(tabs)";
+    const inAuthGroup = segments[0] === "(auth)";
 
-    if (user && !inTabsGroup) {
-      // User is signed in but not in the main app stack.
-      // Redirect them to the main app screen.
+    // List of allowed screens outside of tabs for authenticated users
+    const allowedScreens = ["SubjectDetail", "SubjectAnalytics", "Screens"];
+    const isAllowedScreen = allowedScreens.includes(segments[0]);
+
+    if (user && inAuthGroup) {
+      // User is signed in but in auth screens, redirect to home
       router.replace("/home");
     } else if (!user && inTabsGroup) {
-      // User is signed out but somehow in the main app stack.
+      // User is signed out but in the main app stack.
       // Redirect them to the login screen.
       router.replace("/login");
+    } else if (!user && isAllowedScreen) {
+      // User is signed out but trying to access protected screens
+      router.replace("/login");
     }
+    // If user is authenticated and on allowed screens or tabs, do nothing
   }, [user, loading, segments, router]);
 
   if (loading) {
@@ -38,6 +46,9 @@ function RootLayoutNav() {
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="SubjectDetail" />
+      <Stack.Screen name="SubjectAnalytics" />
+      <Stack.Screen name="Screens/about" />
+      <Stack.Screen name="Screens/profile" />
     </Stack>
   );
 }

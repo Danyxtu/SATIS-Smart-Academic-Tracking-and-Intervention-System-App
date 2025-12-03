@@ -1,14 +1,59 @@
-import { StyleSheet, Text, View, TouchableOpacity, Image, Animated, Dimensions, Modal } from 'react-native'
-import React, { useState, useEffect, useRef } from 'react'
-import { Ionicons } from '@expo/vector-icons'
-import { useRouter } from 'expo-router'
+import {
+  Text,
+  View,
+  TouchableOpacity,
+  Animated,
+  Dimensions,
+  Modal,
+} from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import styles from "@styles/mainMenu";
+import axios from "axios";
+import { useAuth } from "../context/AuthContext";
 
 function Mainmenu() {
   const router = useRouter();
+  const { logout } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const width = Dimensions.get('window').width;
+  const [studentData, setStudentData] = useState(null);
+  const width = Dimensions.get("window").width;
   const translateX = useRef(new Animated.Value(-width * 0.8)).current;
   const opacity = useRef(new Animated.Value(0)).current;
+
+  // Fetch student data for the header
+  useEffect(() => {
+    const fetchStudentData = async () => {
+      try {
+        const res = await axios.get("/student/dashboard");
+        setStudentData(res.data?.student);
+      } catch (err) {
+        console.warn("MainMenu: Failed to fetch student data", err);
+      }
+    };
+    fetchStudentData();
+  }, []);
+
+  // Get initials from first name and last name
+  const getInitials = () => {
+    const firstName = studentData?.firstName || "";
+    const lastName = studentData?.lastName || "";
+    const firstInitial = firstName.charAt(0).toUpperCase();
+    const lastInitial = lastName.charAt(0).toUpperCase();
+    return firstInitial + lastInitial || "ST";
+  };
+
+  // Get grade level display
+  const getGradeDisplay = () => {
+    const gradeLevel = studentData?.gradeLevel;
+    return gradeLevel ? `Grade ${gradeLevel}` : "Student";
+  };
+
+  // Get strand/section display
+  const getStrandDisplay = () => {
+    return studentData?.strand || studentData?.section || "";
+  };
 
   useEffect(() => {
     if (drawerOpen) {
@@ -22,7 +67,7 @@ function Mainmenu() {
           toValue: 1,
           duration: 280,
           useNativeDriver: true,
-        })
+        }),
       ]).start();
     } else {
       Animated.parallel([
@@ -35,33 +80,39 @@ function Mainmenu() {
           toValue: 0,
           duration: 240,
           useNativeDriver: true,
-        })
+        }),
       ]).start();
     }
   }, [drawerOpen]);
+
+  const handleLogout = async () => {
+    setDrawerOpen(false);
+    logout();
+    router.replace("/(auth)/login");
+  };
 
   return (
     <>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={() => setDrawerOpen(true)}
           style={styles.menuButton}
         >
           <Ionicons name="menu" size={28} color="#1f2937" />
         </TouchableOpacity>
-        
+
         <View style={styles.rightSection}>
           <View style={styles.profileSection}>
-            <View style={styles.profileImage}>
-              <Image
-                source={{ uri: "https://via.placeholder.com/48" }}
-                style={styles.avatar}
-              />
+            {/* Avatar with Initials */}
+            <View style={styles.avatarContainer}>
+              <Text style={styles.avatarText}>{getInitials()}</Text>
             </View>
             <View>
-              <Text style={styles.grade}>Grade 12</Text>
-              <Text style={styles.stream}>STEM</Text>
+              <Text style={styles.grade}>{getGradeDisplay()}</Text>
+              {getStrandDisplay() ? (
+                <Text style={styles.stream}>{getStrandDisplay()}</Text>
+              ) : null}
             </View>
           </View>
         </View>
@@ -76,26 +127,21 @@ function Mainmenu() {
       >
         <View style={styles.modalContainer}>
           {/* Backdrop */}
-          <Animated.View 
-            style={[styles.drawerBackdrop, { opacity }]}
-          >
-            <TouchableOpacity 
+          <Animated.View style={[styles.drawerBackdrop, { opacity }]}>
+            <TouchableOpacity
               style={styles.backdropTouchable}
               activeOpacity={1}
-              onPress={() => setDrawerOpen(false)} 
+              onPress={() => setDrawerOpen(false)}
             />
           </Animated.View>
 
           {/* Drawer */}
-          <Animated.View 
-            style={[
-              styles.drawer, 
-              { transform: [{ translateX }] }
-            ]}
+          <Animated.View
+            style={[styles.drawer, { transform: [{ translateX }] }]}
           >
             <View style={styles.drawerHeader}>
               <Text style={styles.drawerTitle}>Menu</Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={() => setDrawerOpen(false)}
                 style={styles.closeButton}
               >
@@ -108,10 +154,14 @@ function Mainmenu() {
                 style={styles.drawerItem}
                 onPress={() => {
                   setDrawerOpen(false);
-                  router.push('/Screens/about');
+                  router.push("/Screens/about");
                 }}
               >
-                <Ionicons name="information-circle-outline" size={24} color="#1f2937" />
+                <Ionicons
+                  name="information-circle-outline"
+                  size={24}
+                  color="#1f2937"
+                />
                 <Text style={styles.drawerItemText}>Learn More</Text>
               </TouchableOpacity>
 
@@ -119,7 +169,7 @@ function Mainmenu() {
                 style={styles.drawerItem}
                 onPress={() => {
                   setDrawerOpen(false);
-                  router.push('/Screens/profile');
+                  router.push("/Screens/profile");
                 }}
               >
                 <Ionicons name="person-outline" size={24} color="#1f2937" />
@@ -128,128 +178,19 @@ function Mainmenu() {
 
               <TouchableOpacity
                 style={styles.drawerItem}
-                onPress={() => {
-                  setDrawerOpen(false);
-                  // Add your logout logic
-                }}
+                onPress={handleLogout}
               >
                 <Ionicons name="log-out-outline" size={24} color="#dc2626" />
-                <Text style={[styles.drawerItemText, { color: '#dc2626' }]}>Logout</Text>
+                <Text style={[styles.drawerItemText, { color: "#dc2626" }]}>
+                  Logout
+                </Text>
               </TouchableOpacity>
             </View>
           </Animated.View>
         </View>
       </Modal>
     </>
-  )
+  );
 }
 
 export default Mainmenu;
-
-const styles = StyleSheet.create({
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    paddingBottom: 10,
-  },
-  menuButton: {
-    padding: 8,
-  },
-  rightSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  profileSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  profileImage: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#374151',
-    overflow: 'hidden',
-  },
-  avatar: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#E0E0E0',
-  },
-  grade: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1f2937',
-  },
-  stream: {
-    fontSize: 11,
-    color: '#6b7280',
-    fontWeight: '500',
-  },
-  modalContainer: {
-    flex: 1,
-  },
-  drawerBackdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-  },
-  backdropTouchable: {
-    flex: 1,
-  },
-  drawer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    bottom: 0,
-    width: '80%',
-    maxWidth: 320,
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 4, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 16,
-  },
-  drawerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 50,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  drawerTitle: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#1f2937',
-  },
-  closeButton: {
-    padding: 4,
-  },
-  drawerContent: {
-    paddingTop: 10,
-  },
-  drawerItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    gap: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  drawerItemText: {
-    fontSize: 16,
-    color: '#1f2937',
-    fontWeight: '600',
-  },
-})

@@ -1,44 +1,21 @@
-import React from "react";
-import { View, Text, StyleSheet, Button } from "react-native";
-import { LayoutDashboard } from "lucide-react-native";
-import { Link } from "expo-router";
-import { router } from "expo-router";
+// This file is kept for backwards compatibility.
+// The actual Screen1 content is now rendered inline in index.jsx
+// You can safely delete this file if not referenced elsewhere.
 
-const Screen1 = () => {
-  return (
-    <View style={styles.container}>
-      <LayoutDashboard size={100} color="#007AFF" />
-      <Text style={styles.title}>Welcome to SATIS</Text>
-      <Text style={styles.description}>
-        Your personal academic assistant. Get a clear and complete overview of
-        your progress, all in one place.
-      </Text>
-      <Button title="Next" onPress={() => router.push("/(landing)/screen2")} />
-    </View>
-  );
-};
+import React from "react";
+import { View, Text, StyleSheet } from "react-native";
+
+const Screen1 = () => (
+  <View style={styles.container}>
+    <Text>Screen 1 - Use index.jsx instead</Text>
+  </View>
+);
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 40,
-    backgroundColor: "#f8f9fa",
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#333",
-    marginTop: 40,
-    marginBottom: 15,
-    textAlign: "center",
-  },
-  description: {
-    fontSize: 16,
-    color: "#666",
-    textAlign: "center",
-    lineHeight: 24,
   },
 });
 

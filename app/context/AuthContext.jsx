@@ -3,21 +3,15 @@ import * as SecureStore from "expo-secure-store";
 import axios from "axios";
 import Constants from "expo-constants";
 
-// Determine API base URL in this order:
-// 1. process.env.API_URL (useful for dev overrides)
-// 2. expo config extra (app.json or app.config.js -> extra.API_URL)
-// 3. default to Android emulator host (10.0.2.2)
 const extraApi =
   Constants.expoConfig?.extra?.API_URL || Constants.manifest?.extra?.API_URL;
 const rawBase = process.env.API_URL || extraApi || "http://10.0.2.2:8000";
 
-// Ensure the API_URL ends with /api (so callers can use relative paths)
 const normalizedBase = rawBase.replace(/\/+$/, "");
 const API_URL = normalizedBase.endsWith("/api")
   ? normalizedBase
   : `${normalizedBase}/api`;
 
-// Set axios baseURL so we can use relative paths in requests
 axios.defaults.baseURL = API_URL;
 
 const AuthContext = createContext(null);

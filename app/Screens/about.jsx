@@ -25,7 +25,14 @@ import {
   ChevronUp,
   CheckCircle,
   Users,
+  GraduationCap,
+  PlayCircle,
 } from "lucide-react-native";
+
+// Tutorial Components
+import TutorialCard from "../components/TutorialCard";
+import TutorialOverlay from "../components/TutorialOverlay";
+import { getTutorialCards, getTutorialById } from "../components/tutorialData";
 
 // FAQ Accordion Item Component
 const FAQItem = ({
@@ -120,6 +127,26 @@ const ContactCard = ({ icon: Icon, title, subtitle, bgColor, onPress }) => (
 const LearnMoreScreen = () => {
   const router = useRouter();
   const [openFAQ, setOpenFAQ] = useState(0);
+  const [activeTutorial, setActiveTutorial] = useState(null);
+  const [tutorialVisible, setTutorialVisible] = useState(false);
+
+  // Get tutorial cards data
+  const tutorialCards = getTutorialCards();
+
+  // Handle tutorial card press
+  const handleTutorialPress = (tutorialId) => {
+    const tutorial = getTutorialById(tutorialId);
+    if (tutorial) {
+      setActiveTutorial(tutorial);
+      setTutorialVisible(true);
+    }
+  };
+
+  // Close tutorial overlay
+  const handleCloseTutorial = () => {
+    setTutorialVisible(false);
+    setActiveTutorial(null);
+  };
 
   const faqs = [
     {
@@ -250,13 +277,44 @@ const LearnMoreScreen = () => {
         {/* Hero Header */}
         <View style={styles.heroCard}>
           <View style={styles.heroIconBox}>
-            <BookOpen color="#FFF" size={28} />
+            <GraduationCap color="#FFF" size={28} />
           </View>
           <Text style={styles.heroTitle}>Learn More</Text>
           <Text style={styles.heroSubtitle}>
             Explore resources to help you succeed in your academic journey. Find
             answers to common questions and discover study tips.
           </Text>
+        </View>
+
+        {/* App Tutorials Section - NEW */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View
+              style={[styles.sectionIconBox, { backgroundColor: "#FCE7F3" }]}
+            >
+              <PlayCircle color="#DB2777" size={18} />
+            </View>
+            <View>
+              <Text style={styles.sectionTitle}>App Tutorials</Text>
+              <Text style={styles.sectionSubtitle}>
+                Step-by-step guides for each feature
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.tutorialGrid}>
+            {tutorialCards.map((card) => (
+              <TutorialCard
+                key={card.id}
+                title={card.title}
+                description={card.description}
+                icon={card.icon}
+                color={card.color}
+                stepCount={card.stepCount}
+                onPress={() => handleTutorialPress(card.id)}
+              />
+            ))}
+          </View>
         </View>
 
         {/* Platform Features Section */}
@@ -473,6 +531,17 @@ const LearnMoreScreen = () => {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Tutorial Overlay */}
+      {activeTutorial && (
+        <TutorialOverlay
+          visible={tutorialVisible}
+          onClose={handleCloseTutorial}
+          steps={activeTutorial.steps}
+          title={activeTutorial.title}
+          accentColor={activeTutorial.color}
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -512,7 +581,7 @@ const styles = StyleSheet.create({
 
   // Hero Card
   heroCard: {
-    backgroundColor: "#6366F1",
+    backgroundColor: "#DB2777",
     borderRadius: 24,
     padding: 24,
     marginBottom: 20,
@@ -535,7 +604,7 @@ const styles = StyleSheet.create({
   },
   heroSubtitle: {
     fontSize: 14,
-    color: "#C7D2FE",
+    color: "#FBCFE8",
     textAlign: "center",
     lineHeight: 20,
   },
@@ -573,6 +642,12 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 12,
   },
+
+  // Tutorial Grid
+  tutorialGrid: {
+    gap: 12,
+  },
+
   featureCard: {
     width: "48%",
     borderRadius: 16,

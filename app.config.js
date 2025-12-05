@@ -28,7 +28,7 @@ export default {
     extra: {
       // Allow overriding via APP_URL env var (useful for CI/dev overrides).
       // If not provided, default to the laptop LAN IP used for device testing.
-      API_URL: process.env.APP_URL || "http://10.238.145.104:8000",
+      API_URL: process.env.APP_URL || "http://172.16.111.104:8000",
     },
   },
 };

@@ -51,13 +51,23 @@ export default function SemesterToggle({
         ].map((sem) => {
           const isActive = selectedSemester === sem.id;
           const isCurrent = currentSemester === sem.id;
+          // Consider a semester "future" (not started) when its id is greater than the current semester
+          const isFutureSemester = currentSemester && sem.id > currentSemester;
 
           return (
             <TouchableOpacity
               key={sem.id}
-              style={[styles.tab, isActive && styles.tabActive]}
-              onPress={() => onSemesterChange && onSemesterChange(sem.id)}
-              activeOpacity={0.7}
+              style={[
+                styles.tab,
+                isFutureSemester && styles.tabDisabled,
+                isActive && !isFutureSemester && styles.tabActive,
+              ]}
+              onPress={() => {
+                if (isFutureSemester) return;
+                onSemesterChange && onSemesterChange(sem.id);
+              }}
+              activeOpacity={isFutureSemester ? 1 : 0.7}
+              disabled={isFutureSemester}
             >
               <View style={styles.tabContent}>
                 <Text
@@ -162,6 +172,10 @@ const styles = StyleSheet.create({
   },
   tabActive: {
     backgroundColor: "#DB2777",
+  },
+  tabDisabled: {
+    backgroundColor: "#F9FAFB",
+    opacity: 0.6,
   },
   tabContent: {
     flexDirection: "row",

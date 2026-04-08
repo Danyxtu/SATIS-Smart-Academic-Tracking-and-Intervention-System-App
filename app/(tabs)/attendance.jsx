@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import Mainmenu from "../../components/MainMenu";
+import Mainmenu from "../../src/components/MainMenu";
 import {
   ScrollView,
   View,
@@ -473,8 +473,8 @@ export default function AttendanceDashboard() {
                   status === "Present"
                     ? "#ecfdf5"
                     : status === "Absent"
-                    ? "#fee2e2"
-                    : "#fff7ed";
+                      ? "#fee2e2"
+                      : "#fff7ed";
                 const icon =
                   status === "Present" ? (
                     <Check color="#16a34a" size={24} />
@@ -487,8 +487,8 @@ export default function AttendanceDashboard() {
                   status === "Present"
                     ? "#16a34a"
                     : status === "Absent"
-                    ? "#dc2626"
-                    : "#f97316";
+                      ? "#dc2626"
+                      : "#f97316";
 
                 return (
                   <View

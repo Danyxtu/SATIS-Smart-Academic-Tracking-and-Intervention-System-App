@@ -15,6 +15,13 @@ export default function SubjectCard({ subject }) {
   const grade = subject?.grade ?? null;
   const gradeDisplay = subject?.gradeDisplay ?? "N/A";
 
+  // Prefer `name`, fall back to other possible keys returned by different APIs
+  const subjectName =
+    subject?.name ??
+    subject?.subject_name ??
+    subject?.subjectName ??
+    "Unknown Subject";
+
   return (
     <View
       style={{
@@ -49,7 +56,7 @@ export default function SubjectCard({ subject }) {
           }}
         >
           <Text style={{ fontSize: 18, color: "#FFF", fontWeight: "700" }}>
-            {subject?.name?.[0] ?? "S"}
+            {subjectName[0] ?? "S"}
           </Text>
         </View>
 
@@ -81,7 +88,7 @@ export default function SubjectCard({ subject }) {
         numberOfLines={2}
         ellipsizeMode="tail"
       >
-        {subject?.name}
+        {subjectName}
       </Text>
 
       {/* Section/Teacher */}
@@ -129,7 +136,13 @@ export default function SubjectCard({ subject }) {
       {/* View Details Button */}
       <TouchableOpacity
         onPress={() =>
-          router.push(`/SubjectAnalytics?enrollmentId=${subject?.id}`)
+          router.push({
+            pathname: "/subjectAnalytics",
+            params: {
+              enrollmentId: subject?.id,
+              subjectName,
+            },
+          })
         }
         style={{
           marginTop: 10,

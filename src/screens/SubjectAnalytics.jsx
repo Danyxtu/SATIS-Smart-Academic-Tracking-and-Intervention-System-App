@@ -41,12 +41,305 @@ import {
 import axios from "axios";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
+import Svg, {
+  Line as SvgLine,
+  Circle as SvgCircle,
+  Polyline,
+  Text as SvgText,
+} from "react-native-svg";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
+// --- Category config for grade trend line chart ---
+const CHART_CATEGORY_COLORS = {
+  written_works: { stroke: "#3b82f6", label: "Written Works" },
+  performance_task: { stroke: "#f59e0b", label: "Performance Task" },
+  quarterly_exam: { stroke: "#ec4899", label: "Quarterly Exam" },
+};
+
+const CHART_CATEGORY_KEYWORDS = {
+  written_works: ["written", "written works", "written_works", "written-work"],
+  performance_task: [
+    "performance",
+    "performance task",
+    "performance_task",
+    "performance-t",
+  ],
+  quarterly_exam: ["quarterly exam", "quarterly_exam", "quarterly", "exam"],
+};
+
+const detectChartCategory = (item) => {
+  const text = (
+    (item.key || "") +
+    " " +
+    (item.name || "") +
+    " " +
+    (item.category || "")
+  ).toLowerCase();
+  for (const [catId, keywords] of Object.entries(CHART_CATEGORY_KEYWORDS)) {
+    if (keywords.some((k) => text.includes(k))) return catId;
+  }
+  return "other";
+};
+
+/**
+ * GradeChartCard - Line chart plotting grade scores by category
+ * Mirrors the web app's GradeChart component
+ */
+const GradeChartCard = ({ gradeBreakdown }) => {
+  // Flatten all grade items from the breakdown categories
+  const allItems = [
+    ...(gradeBreakdown?.writtenWorks?.items || []),
+    ...(gradeBreakdown?.performanceTask?.items || []),
+    ...(gradeBreakdown?.quarterlyExam?.items || []),
+  ];
+
+  // Filter items that have valid scores
+  const validItems = allItems.filter(
+    (item) => item.score !== null && item.totalScore > 0,
+  );
+
+  if (validItems.length === 0) {
+    return (
+      <View style={gradeChartStyles.card}>
+        <View style={gradeChartStyles.header}>
+          <TrendingUp color="#DB2777" size={20} />
+          <Text style={gradeChartStyles.title}>Grade Trend</Text>
+        </View>
+        <View style={gradeChartStyles.emptyContainer}>
+          <Text style={gradeChartStyles.emptyText}>No data yet</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Tag each item with its detected category and percentage
+  const taggedItems = validItems.map((item) => ({
+    ...item,
+    _category: detectChartCategory(item),
+    _pct: Math.round((item.score / item.totalScore) * 100),
+  }));
+
+  // Group by category
+  const grouped = {};
+  taggedItems.forEach((item) => {
+    if (!grouped[item._category]) grouped[item._category] = [];
+    grouped[item._category].push(item);
+  });
+
+  const activeCategories = Object.keys(grouped).filter(
+    (cat) => cat !== "other",
+  );
+  const categoriesToPlot =
+    activeCategories.length > 0 ? activeCategories : Object.keys(grouped);
+
+  const maxLen = Math.max(
+    ...categoriesToPlot.map((cat) => grouped[cat]?.length || 0),
+    1,
+  );
+
+  // Chart dimensions
+  const chartWidth = SCREEN_WIDTH - 64;
+  const chartHeight = 160;
+  const paddingLeft = 34;
+  const paddingTop = 10;
+  const paddingBottom = 22;
+  const paddingRight = 10;
+  const plotWidth = chartWidth - paddingLeft - paddingRight;
+  const plotHeight = chartHeight - paddingTop - paddingBottom;
+
+  const yTicks = [0, 25, 50, 75, 100];
+
+  const getX = (index, total) => {
+    if (total <= 1) return paddingLeft + plotWidth / 2;
+    return paddingLeft + (index / (total - 1)) * plotWidth;
+  };
+  const getY = (pct) => {
+    return paddingTop + plotHeight - (pct / 100) * plotHeight;
+  };
+
+  return (
+    <View style={gradeChartStyles.card}>
+      <View style={gradeChartStyles.header}>
+        <TrendingUp color="#DB2777" size={20} />
+        <Text style={gradeChartStyles.title}>Grade Trend</Text>
+      </View>
+
+      {/* Legend */}
+      <View style={gradeChartStyles.legend}>
+        {categoriesToPlot.map((cat) => {
+          const info = CHART_CATEGORY_COLORS[cat] || {
+            label: cat,
+            stroke: "#6b7280",
+          };
+          return (
+            <View key={cat} style={gradeChartStyles.legendItem}>
+              <View
+                style={[
+                  gradeChartStyles.legendDot,
+                  { backgroundColor: info.stroke },
+                ]}
+              />
+              <Text style={gradeChartStyles.legendText}>{info.label}</Text>
+            </View>
+          );
+        })}
+      </View>
+
+      {/* SVG Chart */}
+      <View style={gradeChartStyles.chartContainer}>
+        <Svg width={chartWidth} height={chartHeight}>
+          {/* Grid lines & Y-axis labels */}
+          {yTicks.map((tick) => {
+            const y = getY(tick);
+            return (
+              <React.Fragment key={`tick-${tick}`}>
+                <SvgLine
+                  x1={paddingLeft}
+                  y1={y}
+                  x2={chartWidth - paddingRight}
+                  y2={y}
+                  stroke="#E5E7EB"
+                  strokeWidth={1}
+                  strokeDasharray="3,3"
+                />
+                <SvgText
+                  x={paddingLeft - 4}
+                  y={y + 3}
+                  fontSize={9}
+                  fill="#9CA3AF"
+                  textAnchor="end"
+                >
+                  {tick}%
+                </SvgText>
+              </React.Fragment>
+            );
+          })}
+
+          {/* X-axis labels */}
+          {Array.from({ length: maxLen }, (_, i) => {
+            const x = getX(i, maxLen);
+            return (
+              <SvgText
+                key={`x-${i}`}
+                x={x}
+                y={chartHeight - 2}
+                fontSize={9}
+                fill="#9CA3AF"
+                textAnchor="middle"
+              >
+                {i + 1}
+              </SvgText>
+            );
+          })}
+
+          {/* Lines per category */}
+          {categoriesToPlot.map((cat) => {
+            const catItems = grouped[cat] || [];
+            const info = CHART_CATEGORY_COLORS[cat] || { stroke: "#6b7280" };
+
+            if (catItems.length === 0) return null;
+
+            const points = catItems.map((item, i) => ({
+              x: getX(i, catItems.length),
+              y: getY(item._pct),
+            }));
+
+            const pointsStr = points.map((p) => `${p.x},${p.y}`).join(" ");
+
+            return (
+              <React.Fragment key={cat}>
+                {points.length > 1 && (
+                  <Polyline
+                    points={pointsStr}
+                    fill="none"
+                    stroke={info.stroke}
+                    strokeWidth={2}
+                  />
+                )}
+                {points.map((p, i) => (
+                  <SvgCircle
+                    key={`${cat}-dot-${i}`}
+                    cx={p.x}
+                    cy={p.y}
+                    r={3}
+                    fill={info.stroke}
+                  />
+                ))}
+              </React.Fragment>
+            );
+          })}
+        </Svg>
+      </View>
+    </View>
+  );
+};
+
+const gradeChartStyles = StyleSheet.create({
+  card: {
+    backgroundColor: "#FFF",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 10,
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  legend: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginBottom: 8,
+  },
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  legendDot: {
+    width: 12,
+    height: 3,
+    borderRadius: 2,
+  },
+  legendText: {
+    fontSize: 11,
+    color: "#6B7280",
+  },
+  chartContainer: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    padding: 4,
+  },
+  emptyContainer: {
+    height: 120,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+  },
+  emptyText: {
+    color: "#9CA3AF",
+    fontSize: 13,
+  },
+});
+
 export default function SubjectAnalytics() {
   const router = useRouter();
-  const { enrollmentId } = useLocalSearchParams();
+  const { enrollmentId, subjectName: routeSubjectName } =
+    useLocalSearchParams();
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -63,6 +356,12 @@ export default function SubjectAnalytics() {
     const { subject, performance, attendance } = data;
     const gradeBreakdown = performance?.gradeBreakdown || {};
     const quarterlyGrades = performance?.quarterlyGrades || [];
+
+    // Resolve subject name with fallback to route param
+    const pdfSubjectName =
+      subject?.name && subject.name !== "Unknown Subject"
+        ? subject.name
+        : routeSubjectName || subject?.name || "Subject";
 
     // Determine grade color
     const getGradeColorHex = (grade) => {
@@ -116,7 +415,7 @@ export default function SubjectAnalytics() {
           }
         </td>
       </tr>
-    `
+    `,
       )
       .join("");
 
@@ -129,7 +428,7 @@ export default function SubjectAnalytics() {
           q.quarter
         }</div>
         <div style="font-size: 24px; font-weight: 700; color: ${getGradeColorHex(
-          q.grade
+          q.grade,
         )};">
           ${q.grade ?? "--"}
         </div>
@@ -137,7 +436,7 @@ export default function SubjectAnalytics() {
           ${q.assignmentCount || 0} assignments
         </div>
       </div>
-    `
+    `,
       )
       .join("");
 
@@ -278,11 +577,11 @@ export default function SubjectAnalytics() {
         
         <div class="subject-header">
           <div>
-            <div class="subject-name">${subject?.name || "Subject"}</div>
+            <div class="subject-name">${pdfSubjectName}</div>
             <div class="subject-teacher">
               ${subject?.teacher || "N/A"} • ${subject?.section || ""} • ${
-      subject?.schoolYear || ""
-    }
+                subject?.schoolYear || ""
+              }
             </div>
           </div>
           <div class="grade-circle">${performance?.overallGrade ?? "--"}</div>
@@ -310,11 +609,11 @@ export default function SubjectAnalytics() {
                 getRiskLabel(performance?.overallGrade) === "On Track"
                   ? "risk-on-track"
                   : getRiskLabel(performance?.overallGrade) ===
-                    "Needs Attention"
-                  ? "risk-needs-attention"
-                  : getRiskLabel(performance?.overallGrade) === "At Risk"
-                  ? "risk-at-risk"
-                  : "risk-critical"
+                      "Needs Attention"
+                    ? "risk-needs-attention"
+                    : getRiskLabel(performance?.overallGrade) === "At Risk"
+                      ? "risk-at-risk"
+                      : "risk-critical"
               }">${getRiskLabel(performance?.overallGrade)}</span>
               <div class="stat-label" style="margin-top: 5px;">Status</div>
             </div>
@@ -442,7 +741,7 @@ export default function SubjectAnalytics() {
       Alert.alert(
         "Export Failed",
         err?.message || "Could not export PDF. Please try again.",
-        [{ text: "OK" }]
+        [{ text: "OK" }],
       );
     } finally {
       setExporting(false);
@@ -499,7 +798,7 @@ export default function SubjectAnalytics() {
       (performanceTaskItems.length > 0
         ? performanceTaskItems.reduce(
             (sum, i) => sum + (i.percentage || 0),
-            0
+            0,
           ) / performanceTaskItems.length
         : 0);
     const quarterlyExamAvg =
@@ -791,7 +1090,7 @@ export default function SubjectAnalytics() {
       quarterlyExamAvg,
     };
     const validCategoryScores = Object.values(categoryScores).filter(
-      (s) => s > 0
+      (s) => s > 0,
     );
     const avgCategoryScore =
       validCategoryScores.length > 0
@@ -956,7 +1255,7 @@ export default function SubjectAnalytics() {
     if (attendanceRate < 95) {
       const targetAttendance = Math.min(95, attendanceRate + 10);
       const attendanceGain = Math.round(
-        (targetAttendance - attendanceRate) * 0.5
+        (targetAttendance - attendanceRate) * 0.5,
       );
       const remainingDays = Math.max(0, 20 - totalDays); // Assume ~20 class days remaining
       const requiredPresentDays =
@@ -1068,7 +1367,7 @@ export default function SubjectAnalytics() {
       const targetCategoryScore = Math.min(90, weakestScore + 15);
       const categoryWeight = categoryWeights[weakestCategory];
       const categoryGain = Math.round(
-        (targetCategoryScore - weakestScore) * categoryWeight
+        (targetCategoryScore - weakestScore) * categoryWeight,
       );
       projectedGradeGain += Math.min(categoryGain, 3);
 
@@ -1143,7 +1442,7 @@ export default function SubjectAnalytics() {
       currentValue: `${currentGrade}% avg`,
       targetValue: `${Math.round(requiredAvgScore)}% avg needed`,
       action: `Score an average of ${Math.round(
-        requiredAvgScore
+        requiredAvgScore,
       )}% on your next ${remainingTasks} graded activities`,
       gradeImpact: `+${
         gapToTarget - projectedGradeGain > 0
@@ -1204,7 +1503,7 @@ export default function SubjectAnalytics() {
     } catch (err) {
       console.warn("SubjectAnalytics fetch error", err?.response || err);
       setError(
-        err?.response?.data?.message || "Failed to load subject analytics"
+        err?.response?.data?.message || "Failed to load subject analytics",
       );
     } finally {
       setLoading(false);
@@ -1271,6 +1570,12 @@ export default function SubjectAnalytics() {
   const quarterlyGrades = performance?.quarterlyGrades || [];
   const gradeBreakdown = performance?.gradeBreakdown || {};
 
+  // Prefer API subject name, fall back to route param to avoid "Unknown Subject"
+  const displaySubjectName =
+    subject?.name && subject.name !== "Unknown Subject"
+      ? subject.name
+      : routeSubjectName || subject?.name || "Subject";
+
   return (
     <SafeAreaView style={styles.safe}>
       {/* Header */}
@@ -1280,9 +1585,9 @@ export default function SubjectAnalytics() {
         </TouchableOpacity>
         <View style={styles.headerContent}>
           <Text style={styles.breadcrumb}>
-            Performance Analytics › {subject?.name || "Subject"}
+            Performance Analytics › {displaySubjectName}
           </Text>
-          <Text style={styles.subjectTitle}>{subject?.name || "Subject"}</Text>
+          <Text style={styles.subjectTitle}>{displaySubjectName}</Text>
           <Text style={styles.teacherText}>
             {subject?.teacher} • {subject?.schoolYear} •{" "}
             {subject?.section || ""}
@@ -1577,7 +1882,7 @@ export default function SubjectAnalytics() {
                         styles.gradeSummaryValue,
                         {
                           color: getGradeColor(
-                            personalizedInsights.currentGrade
+                            personalizedInsights.currentGrade,
                           ),
                         },
                       ]}
@@ -1602,7 +1907,7 @@ export default function SubjectAnalytics() {
                         styles.gradeSummaryValue,
                         {
                           color: getGradeColor(
-                            personalizedInsights.expectedGrade
+                            personalizedInsights.expectedGrade,
                           ),
                         },
                       ]}
@@ -1640,8 +1945,8 @@ export default function SubjectAnalytics() {
                                   item.impact > 0
                                     ? "#10B981"
                                     : item.impact < 0
-                                    ? "#EF4444"
-                                    : "#6B7280",
+                                      ? "#EF4444"
+                                      : "#6B7280",
                               },
                             ]}
                           >
@@ -1663,7 +1968,7 @@ export default function SubjectAnalytics() {
                           styles.finalCalcValue,
                           {
                             color: getGradeColor(
-                              personalizedInsights.expectedGrade
+                              personalizedInsights.expectedGrade,
                             ),
                           },
                         ]}
@@ -1687,8 +1992,8 @@ export default function SubjectAnalytics() {
                             personalizedInsights.attendanceRate >= 90
                               ? "#10B981"
                               : personalizedInsights.attendanceRate >= 80
-                              ? "#F59E0B"
-                              : "#EF4444",
+                                ? "#F59E0B"
+                                : "#EF4444",
                         },
                       ]}
                     >
@@ -1706,8 +2011,8 @@ export default function SubjectAnalytics() {
                             personalizedInsights.completionRate >= 80
                               ? "#10B981"
                               : personalizedInsights.completionRate >= 60
-                              ? "#F59E0B"
-                              : "#EF4444",
+                                ? "#F59E0B"
+                                : "#EF4444",
                         },
                       ]}
                     >
@@ -1725,16 +2030,16 @@ export default function SubjectAnalytics() {
                             personalizedInsights.trendDirection === "improving"
                               ? "#10B981"
                               : personalizedInsights.trendDirection === "stable"
-                              ? "#6B7280"
-                              : "#EF4444",
+                                ? "#6B7280"
+                                : "#EF4444",
                         },
                       ]}
                     >
                       {personalizedInsights.trendDirection === "improving"
                         ? "↑ Up"
                         : personalizedInsights.trendDirection === "declining"
-                        ? "↓ Down"
-                        : "→ Stable"}
+                          ? "↓ Down"
+                          : "→ Stable"}
                     </Text>
                   </View>
                   <View style={styles.metricBox}>
@@ -1765,7 +2070,7 @@ export default function SubjectAnalytics() {
                             styles.categoryScore,
                             {
                               color: getGradeColor(
-                                personalizedInsights.writtenWorksAvg
+                                personalizedInsights.writtenWorksAvg,
                               ),
                             },
                           ]}
@@ -1780,7 +2085,7 @@ export default function SubjectAnalytics() {
                             styles.categoryScore,
                             {
                               color: getGradeColor(
-                                personalizedInsights.performanceTaskAvg
+                                personalizedInsights.performanceTaskAvg,
                               ),
                             },
                           ]}
@@ -1795,7 +2100,7 @@ export default function SubjectAnalytics() {
                             styles.categoryScore,
                             {
                               color: getGradeColor(
-                                personalizedInsights.quarterlyExamAvg
+                                personalizedInsights.quarterlyExamAvg,
                               ),
                             },
                           ]}
@@ -1811,9 +2116,9 @@ export default function SubjectAnalytics() {
                         {personalizedInsights.weakestCategory === "writtenWorks"
                           ? "Written Works"
                           : personalizedInsights.weakestCategory ===
-                            "performanceTask"
-                          ? "Performance Tasks"
-                          : "Quarterly Exam"}{" "}
+                              "performanceTask"
+                            ? "Performance Tasks"
+                            : "Quarterly Exam"}{" "}
                         ({personalizedInsights.weakestScore}%)
                       </Text>
                     </View>
@@ -1836,8 +2141,8 @@ export default function SubjectAnalytics() {
                                 risk.severity === "high"
                                   ? "#EF4444"
                                   : risk.severity === "medium"
-                                  ? "#F59E0B"
-                                  : "#6B7280",
+                                    ? "#F59E0B"
+                                    : "#6B7280",
                             },
                           ]}
                         />
@@ -1981,6 +2286,9 @@ export default function SubjectAnalytics() {
             </View>
           </View>
         </View>
+
+        {/* Grade Trend Line Chart */}
+        <GradeChartCard gradeBreakdown={gradeBreakdown} />
 
         {/* Grade Breakdown */}
         <View style={styles.card}>
@@ -2187,7 +2495,7 @@ export default function SubjectAnalytics() {
                         styles.goalGradeValue,
                         {
                           color: getGradeColor(
-                            personalizedInsights?.currentGrade
+                            personalizedInsights?.currentGrade,
                           ),
                         },
                       ]}
@@ -2205,7 +2513,7 @@ export default function SubjectAnalytics() {
                         styles.goalGradeValue,
                         {
                           color: getGradeColor(
-                            personalizedInsights?.expectedGrade
+                            personalizedInsights?.expectedGrade,
                           ),
                         },
                       ]}
@@ -2322,7 +2630,7 @@ export default function SubjectAnalytics() {
                             styles.conclusionGradeValue,
                             {
                               color: getGradeColor(
-                                improvementPlan.conclusion.currentGrade
+                                improvementPlan.conclusion.currentGrade,
                               ),
                             },
                           ]}
@@ -2339,7 +2647,7 @@ export default function SubjectAnalytics() {
                             styles.conclusionGradeValue,
                             {
                               color: getGradeColor(
-                                improvementPlan.conclusion.expectedGrade
+                                improvementPlan.conclusion.expectedGrade,
                               ),
                             },
                           ]}

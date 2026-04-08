@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { AuthProvider, useAuth } from "../context/AuthContext";
+import { AuthProvider, useAuth } from "../src/context/AuthContext";
 import { useRouter, useSegments } from "expo-router";
 import { Stack } from "expo-router";
 import { View, Text } from "react-native";
@@ -19,7 +19,12 @@ function RootLayoutNav() {
       .includes("force-change-password");
 
     // List of allowed screens outside of tabs for authenticated users
-    const allowedScreens = ["SubjectDetail", "SubjectAnalytics", "Screens"];
+    const allowedScreens = [
+      "SubjectDetail",
+      "SubjectAnalytics",
+      "Screens",
+      "(screens)",
+    ];
     const isAllowedScreen = allowedScreens.includes(segments[0]);
 
     // If user must change password, redirect to force-change-password screen

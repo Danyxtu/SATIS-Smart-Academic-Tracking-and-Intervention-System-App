@@ -22,7 +22,7 @@ import SchoolLogo from "@assets/school-logo.png";
 const { width, height } = Dimensions.get("window");
 
 const Login = () => {
-  const [email, setEmail] = useState("");
+  const [loginInput, setLoginInput] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -31,13 +31,13 @@ const Login = () => {
   const { login } = useAuth();
 
   const handleLogin = async () => {
-    if (!email || !password) {
-      setError("Please enter email and password.");
+    if (!loginInput || !password) {
+      setError("Please enter your username or email and password.");
       return;
     }
     setError("");
     setLoading(true);
-    const res = await login(email, password);
+    const res = await login(loginInput, password);
     setLoading(false);
     if (!res.success) {
       setError(res.message || "Please check your credentials.");
@@ -79,19 +79,18 @@ const Login = () => {
               <Text style={styles.welcomeText}>Welcome Back</Text>
               <Text style={styles.subHeaderText}>Sign in to continue</Text>
 
-              {/* Email Field */}
+              {/* Username or Email Field */}
               <View style={styles.field}>
-                <Text style={styles.label}>Email</Text>
+                <Text style={styles.label}>Username or Email</Text>
                 <View style={styles.inputContainer}>
                   <User size={20} color="#E91E63" style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
-                    placeholder="Enter your email"
+                    placeholder="Enter your username or email"
                     placeholderTextColor="#9CA3AF"
-                    keyboardType="email-address"
                     autoCapitalize="none"
-                    value={email}
-                    onChangeText={setEmail}
+                    value={loginInput}
+                    onChangeText={setLoginInput}
                   />
                 </View>
               </View>

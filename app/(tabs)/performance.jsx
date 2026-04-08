@@ -10,8 +10,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import Mainmenu from "../../components/MainMenu";
-import SemesterToggle from "../../components/SemesterToggle";
+import Mainmenu from "../../src/components/MainMenu";
+import SemesterToggle from "../../src/components/SemesterToggle";
 import {
   BarChart,
   Target,
@@ -51,7 +51,7 @@ const PerformanceAnalytics = () => {
     } catch (err) {
       console.warn("Performance fetch error", err?.response || err);
       setError(
-        err?.response?.data?.message || "Failed to load performance data"
+        err?.response?.data?.message || "Failed to load performance data",
       );
     } finally {
       setLoading(false);
@@ -70,7 +70,7 @@ const PerformanceAnalytics = () => {
       setLoading(true);
       await fetchData(semester);
     },
-    [fetchData, selectedSemester]
+    [fetchData, selectedSemester],
   );
 
   const onRefresh = useCallback(async () => {
@@ -307,15 +307,31 @@ const PerformanceAnalytics = () => {
                 style={styles.subjectCard}
                 onPress={() =>
                   router.push({
-                    pathname: "/SubjectAnalytics",
-                    params: { enrollmentId: subject.id },
+                    pathname: "/subjectAnalytics",
+                    params: {
+                      enrollmentId: subject.id,
+                      // pass subject name so detail screens that expect it don't show Unknown Subject
+                      subjectName:
+                        subject.name ??
+                        subject.subject_name ??
+                        subject.subjectName ??
+                        "Unknown Subject",
+                    },
                   })
                 }
               >
-                <Text style={styles.subjectName}>{subject.name}</Text>
+                {/* Prefer `name`, fall back to other possible keys returned by different APIs */}
+                <Text style={styles.subjectName}>
+                  {subject.name ??
+                    subject.subject_name ??
+                    subject.subjectName ??
+                    "Unknown Subject"}
+                </Text>
                 <View style={styles.teacherRow}>
                   <User color="#6B7280" size={14} />
-                  <Text style={styles.teacherName}>{subject.teacher}</Text>
+                  <Text style={styles.teacherName}>
+                    {subject.teacher ?? subject.teacher_name ?? "N/A"}
+                  </Text>
                 </View>
                 <Text style={styles.gradeLabel}>CURRENT GRADE</Text>
                 <View style={styles.gradeRow}>

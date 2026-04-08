@@ -2,7 +2,7 @@ export default {
   expo: {
     name: "satis-app",
     slug: "satis-app",
-    scheme: "satis-app",
+    scheme: "satisapp",
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/icon.png",
@@ -12,11 +12,14 @@ export default {
       resizeMode: "contain",
       backgroundColor: "#ffffff",
     },
-    plugins: ["expo-secure-store", "expo-router"],
+    plugins: [
+      "expo-secure-store",
+      ["expo-router"], // ← correct format
+    ],
     ios: {
       supportsTablet: true,
+      bundleIdentifier: "com.danyxtu.satisapp",
     },
-    newArchEnabled: false,
     android: {
       package: "com.danyxtu.satisapp",
       edgeToEdgeEnabled: true,
@@ -30,7 +33,7 @@ export default {
       favicon: "./assets/favicon.png",
     },
     extra: {
-      API_URL: process.env.API_URL || "http://10.20.74.104:8000",
+      API_URL: process.env.EXPO_PUBLIC_API_URL || "http://10.20.74.104:8000",
       eas: {
         projectId: "5ff329ca-387f-4e65-a2d7-83637e2e5e1e",
       },

@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
-import Mainmenu from "../../components/MainMenu";
+import Mainmenu from "../../src/components/MainMenu";
 import {
   AlertTriangle,
   CheckCircle,
@@ -337,8 +337,8 @@ const InterventionCard = ({ intervention, onCompleteTask }) => {
     intervention.priority === "High"
       ? AlertTriangle
       : intervention.priority === "Medium"
-      ? BarChart2
-      : CheckCircle;
+        ? BarChart2
+        : CheckCircle;
 
   return (
     <View style={styles.card}>
@@ -418,8 +418,8 @@ const InterventionCard = ({ intervention, onCompleteTask }) => {
                 intervention.attendanceRate < 80
                   ? "#FEE2E2"
                   : intervention.attendanceRate < 90
-                  ? "#FEF3C7"
-                  : "#D1FAE5",
+                    ? "#FEF3C7"
+                    : "#D1FAE5",
             },
           ]}
         >
@@ -431,8 +431,8 @@ const InterventionCard = ({ intervention, onCompleteTask }) => {
                   intervention.attendanceRate < 80
                     ? "#DC2626"
                     : intervention.attendanceRate < 90
-                    ? "#D97706"
-                    : "#059669",
+                      ? "#D97706"
+                      : "#059669",
               },
             ]}
           >
@@ -557,7 +557,7 @@ const RecentFeedbackCard = ({ feedback, onMarkRead, highlightedId }) => {
             useNativeDriver: true,
           }),
         ]),
-        { iterations: 3 }
+        { iterations: 3 },
       );
       blinkAnimation.start();
       return () => blinkAnimation.stop();

@@ -11,7 +11,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Mainmenu from "../../components/MainMenu";
+import Mainmenu from "../../src/components/MainMenu";
 import {
   ShieldAlert,
   ShieldHalf,
@@ -50,7 +50,7 @@ export default function SubjectRisk() {
     } catch (err) {
       console.warn("Subjects at risk fetch error", err?.response || err);
       setError(
-        err?.response?.data?.message || "Failed to load subjects at risk"
+        err?.response?.data?.message || "Failed to load subjects at risk",
       );
     } finally {
       setLoading(false);

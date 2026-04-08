@@ -27,6 +27,8 @@ const ForceChangePassword = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { changePassword, user } = useAuth();
+  const accountIdentifier =
+    user?.email || user?.personal_email || user?.username || null;
 
   // Password strength checker
   const getPasswordStrength = (pass) => {
@@ -115,10 +117,10 @@ const ForceChangePassword = () => {
               </Text>
 
               {/* User Info */}
-              {user?.email && (
+              {accountIdentifier && (
                 <View style={styles.userInfoContainer}>
                   <Text style={styles.userInfoText}>
-                    Logged in as: {user.email}
+                    Logged in as: {accountIdentifier}
                   </Text>
                 </View>
               )}

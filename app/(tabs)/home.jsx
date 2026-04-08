@@ -19,14 +19,14 @@ import {
   TrendingUp,
 } from "lucide-react-native";
 import { useRouter } from "expo-router";
-import Mainmenu from "../../components/MainMenu";
+import Mainmenu from "../../src/components/MainMenu";
 import styles from "@styles/home";
 import axios from "axios";
-import SubjectCard from "../../components/SubjectCard";
-import NotificationItem from "../../components/NotificationItem";
-import MiniChart from "../../components/MiniChart";
-import QuickActionCard from "../../components/QuickActionCard";
-import SemesterToggle from "../../components/SemesterToggle";
+import SubjectCard from "../../src/components/SubjectCard";
+import NotificationItem from "../../src/components/NotificationItem";
+import MiniChart from "../../src/components/MiniChart";
+import QuickActionCard from "../../src/components/QuickActionCard";
+import SemesterToggle from "../../src/components/SemesterToggle";
 import SchoolPic from "@assets/school.jpg";
 // Helper function for time-based greeting
 const getGreeting = () => {
@@ -87,7 +87,7 @@ export default function Home() {
       await fetchDashboard(semester);
       setLoading(false);
     },
-    [fetchDashboard, selectedSemester]
+    [fetchDashboard, selectedSemester],
   );
 
   const markNotificationRead = async (notificationId) => {
@@ -99,11 +99,11 @@ export default function Home() {
         return {
           ...prev,
           notifications: prev.notifications.map((n) =>
-            n.id === notificationId ? { ...n, isRead: true } : n
+            n.id === notificationId ? { ...n, isRead: true } : n,
           ),
           unreadNotificationCount: Math.max(
             (prev.unreadNotificationCount || 0) - 1,
-            0
+            0,
           ),
         };
       });
@@ -270,7 +270,7 @@ export default function Home() {
                         ? `${Math.round(
                             (data?.stats?.completedTasks /
                               (data?.stats?.totalTasks || 1)) *
-                              100
+                              100,
                           )}%`
                         : "0%",
                   },
@@ -282,7 +282,7 @@ export default function Home() {
                 ? `${Math.round(
                     (data?.stats?.completedTasks /
                       (data?.stats?.totalTasks || 1)) *
-                      100
+                      100,
                   )}%`
                 : "N/A"}
             </Text>
@@ -345,8 +345,19 @@ export default function Home() {
               <TrendingUp size={18} color="#DB2777" />
               <Text style={styles.trendTitle}>Grade Trend</Text>
             </View>
-            <Text style={styles.trendSubtitle}>Your weekly performance</Text>
-            <MiniChart data={data?.gradeTrend || []} />
+            {data?.gradeTrend?.subjectName ? (
+              <Text style={styles.trendSubtitle}>
+                <Text style={{ fontWeight: "600", color: "#6366F1" }}>
+                  {data.gradeTrend.subjectName}
+                </Text>
+                {" — last updated"}
+              </Text>
+            ) : (
+              <Text style={styles.trendSubtitle}>
+                Score breakdown by category
+              </Text>
+            )}
+            <MiniChart data={data?.gradeTrend || {}} />
           </View>
 
           {/* Pending Tasks */}

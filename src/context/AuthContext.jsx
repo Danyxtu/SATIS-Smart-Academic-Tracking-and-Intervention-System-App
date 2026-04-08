@@ -3,9 +3,11 @@ import * as SecureStore from "expo-secure-store";
 import axios from "axios";
 import Constants from "expo-constants";
 
-const extraApi =
-  Constants.expoConfig?.extra?.API_URL || Constants.manifest?.extra?.API_URL;
-const rawBase = process.env.API_URL || extraApi || "http://10.0.2.2:8000";
+// Priority: EXPO_PUBLIC env var → app.config.js extra → emulator fallback
+const rawBase =
+  process.env.EXPO_PUBLIC_API_URL ||
+  Constants.expoConfig?.extra?.API_URL ||
+  "http://10.0.2.2:8000";
 
 const normalizedBase = rawBase.replace(/\/+$/, "");
 const API_URL = normalizedBase.endsWith("/api")
@@ -63,11 +65,23 @@ export function AuthProvider({ children }) {
     })();
   }, []);
 
-  const login = async (email, password) => {
+  const login = async (loginInput, password) => {
     try {
+      const identifier = (loginInput || "").trim();
+
       // call backend login endpoint
       // Use relative path because axios.defaults.baseURL was set earlier
-      const res = await axios.post(`/login`, { email, password });
+      const payload = {
+        login: identifier,
+        password,
+      };
+
+      // Backward compatibility for older API versions that still validate `email`
+      if (identifier.includes("@")) {
+        payload.email = identifier;
+      }
+
+      const res = await axios.post(`/login`, payload);
 
       const token = res.data.token;
       const userData = res.data.user;
@@ -87,7 +101,12 @@ export function AuthProvider({ children }) {
       // Log error for debugging
       // eslint-disable-next-line no-console
       console.error("[AuthContext] login error:", err?.response || err);
+      const validationMessage =
+        err?.response?.data?.errors?.login?.[0] ||
+        err?.response?.data?.errors?.email?.[0] ||
+        err?.response?.data?.errors?.password?.[0];
       const message =
+        validationMessage ||
         err?.response?.data?.message ||
         err?.response?.data?.error ||
         `Login failed (${err?.response?.status || "unknown"})`;
@@ -114,7 +133,7 @@ export function AuthProvider({ children }) {
     } catch (err) {
       console.error(
         "[AuthContext] changePassword error:",
-        err?.response || err
+        err?.response || err,
       );
       const message =
         err?.response?.data?.message ||

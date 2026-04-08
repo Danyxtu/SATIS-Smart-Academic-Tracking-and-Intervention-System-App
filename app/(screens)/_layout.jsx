@@ -6,7 +6,7 @@ export default function ScreenLayout() {
       <Stack.Screen name="about" />
       <Stack.Screen name="profile" />
       <Stack.Screen name="subjectAnalytics" />
-      <Stack.Screen name="subjectDetail" />
+      <Stack.Screen name="subjectDetails" />
     </Stack>
   );
 }

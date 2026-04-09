@@ -8,6 +8,9 @@ import {
   ActivityIndicator,
   RefreshControl,
   Animated,
+  Alert,
+  Modal,
+  TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
@@ -42,6 +45,10 @@ const InterventionFeedback = () => {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState("all");
   const [highlightedId, setHighlightedId] = useState(null);
+  const [requestingCompletionId, setRequestingCompletionId] = useState(null);
+  const [completionModalVisible, setCompletionModalVisible] = useState(false);
+  const [selectedIntervention, setSelectedIntervention] = useState(null);
+  const [completionNotes, setCompletionNotes] = useState("");
   const scrollViewRef = useRef(null);
   const feedbackRefs = useRef({});
 
@@ -108,6 +115,64 @@ const InterventionFeedback = () => {
       console.warn("Mark read error:", err?.response || err);
     }
   };
+
+  const openCompletionModal = (intervention) => {
+    setSelectedIntervention(intervention);
+    setCompletionNotes("");
+    setCompletionModalVisible(true);
+  };
+
+  const closeCompletionModal = () => {
+    if (requestingCompletionId) {
+      return;
+    }
+
+    setCompletionModalVisible(false);
+    setSelectedIntervention(null);
+    setCompletionNotes("");
+  };
+
+  const handleRequestCompletion = async () => {
+    if (!selectedIntervention?.id) {
+      return;
+    }
+
+    try {
+      setRequestingCompletionId(selectedIntervention.id);
+
+      const payload = {};
+      if (completionNotes.trim()) {
+        payload.notes = completionNotes.trim();
+      }
+
+      const res = await axios.post(
+        `/student/interventions/${selectedIntervention.id}/request-completion`,
+        payload,
+      );
+
+      Alert.alert(
+        "Request Submitted",
+        res?.data?.message ||
+          "Completion request submitted. Your teacher will review it.",
+      );
+
+      setCompletionModalVisible(false);
+      setSelectedIntervention(null);
+      setCompletionNotes("");
+      fetchData(true);
+    } catch (err) {
+      Alert.alert(
+        "Unable to Submit",
+        err?.response?.data?.message || "Failed to submit completion request.",
+      );
+    } finally {
+      setRequestingCompletionId(null);
+    }
+  };
+
+  const isSubmittingCompletion =
+    !!selectedIntervention &&
+    requestingCompletionId === selectedIntervention.id;
 
   if (loading) {
     return (
@@ -249,6 +314,8 @@ const InterventionFeedback = () => {
               key={intervention.id}
               intervention={intervention}
               onCompleteTask={handleCompleteTask}
+              onRequestCompletion={openCompletionModal}
+              requestingCompletion={requestingCompletionId === intervention.id}
             />
           ))
         ) : (
@@ -292,6 +359,74 @@ const InterventionFeedback = () => {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      <Modal
+        visible={completionModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={closeCompletionModal}
+      >
+        <View style={styles.completionModalOverlay}>
+          <View style={styles.completionModalCard}>
+            <View style={styles.completionModalHeader}>
+              <Text style={styles.completionModalTitle}>
+                Request Completion
+              </Text>
+              <Text style={styles.completionModalSubtitle}>
+                {selectedIntervention?.subjectName || "Intervention"}
+              </Text>
+            </View>
+
+            <Text style={styles.completionModalBodyText}>
+              You are requesting to mark this Tier 3 intervention as complete.
+              Your teacher will review and approve your request.
+            </Text>
+
+            <Text style={styles.inputLabel}>
+              Notes for your teacher (optional)
+            </Text>
+            <TextInput
+              style={styles.completionNotesInput}
+              value={completionNotes}
+              onChangeText={setCompletionNotes}
+              placeholder="Describe what you've accomplished or any additional information..."
+              placeholderTextColor="#9CA3AF"
+              multiline
+              maxLength={1000}
+              textAlignVertical="top"
+            />
+            <Text style={styles.completionCounter}>
+              {completionNotes.length}/1000
+            </Text>
+
+            <View style={styles.completionModalActions}>
+              <TouchableOpacity
+                style={styles.completionCancelBtn}
+                onPress={closeCompletionModal}
+                disabled={isSubmittingCompletion}
+              >
+                <Text style={styles.completionCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.completionSubmitBtn,
+                  isSubmittingCompletion && styles.completionSubmitBtnDisabled,
+                ]}
+                onPress={handleRequestCompletion}
+                disabled={isSubmittingCompletion}
+              >
+                {isSubmittingCompletion ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={styles.completionSubmitBtnText}>
+                    Submit Request
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -308,8 +443,15 @@ const StatCard = ({ label, value, icon: Icon, color, bgColor }) => (
 );
 
 // --- Intervention Card Component ---
-const InterventionCard = ({ intervention, onCompleteTask }) => {
+const InterventionCard = ({
+  intervention,
+  onCompleteTask,
+  onRequestCompletion,
+  requestingCompletion,
+}) => {
   const [isExpanded, setIsExpanded] = useState(true);
+  const isPendingApproval =
+    intervention.isPendingApproval ?? intervention.isPendingCompletionApproval;
 
   const getPriorityColor = (priority) => {
     if (priority === "High") return { bg: "#FEE2E2", text: "#DC2626" };
@@ -386,12 +528,67 @@ const InterventionCard = ({ intervention, onCompleteTask }) => {
             {intervention.typeLabel}
           </Text>
         </View>
+        {intervention.deadlineLabel && (
+          <View style={styles.metaItem}>
+            {intervention.isDeadlineOverdue ? (
+              <AlertCircle color="#DC2626" size={12} />
+            ) : (
+              <Clock color="#D97706" size={12} />
+            )}
+            <Text
+              style={[
+                styles.metaText,
+                intervention.isDeadlineOverdue
+                  ? styles.deadlineMetaTextOverdue
+                  : styles.deadlineMetaText,
+              ]}
+            >
+              {intervention.isDeadlineOverdue
+                ? "Deadline overdue"
+                : `Deadline: ${intervention.deadlineLabel}`}
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* Notes */}
       {intervention.notes && (
         <View style={styles.notesBox}>
           <Text style={styles.notesText}>{intervention.notes}</Text>
+        </View>
+      )}
+
+      {intervention.deadlineLabel && (
+        <View
+          style={[
+            styles.deadlineInfoBox,
+            intervention.isDeadlineOverdue
+              ? styles.deadlineInfoBoxOverdue
+              : styles.deadlineInfoBoxUpcoming,
+          ]}
+        >
+          <Text
+            style={[
+              styles.deadlineInfoTitle,
+              intervention.isDeadlineOverdue
+                ? styles.deadlineInfoTitleOverdue
+                : styles.deadlineInfoTitleUpcoming,
+            ]}
+          >
+            {intervention.isDeadlineOverdue
+              ? "This intervention deadline has passed. Please contact your teacher immediately."
+              : "Complete this intervention on or before:"}
+          </Text>
+          <Text
+            style={[
+              styles.deadlineInfoLabel,
+              intervention.isDeadlineOverdue
+                ? styles.deadlineInfoTitleOverdue
+                : styles.deadlineInfoTitleUpcoming,
+            ]}
+          >
+            {intervention.deadlineLabel}
+          </Text>
         </View>
       )}
 
@@ -532,6 +729,75 @@ const InterventionCard = ({ intervention, onCompleteTask }) => {
       {intervention.tasks.length === 0 && (
         <Text style={styles.noTasksText}>No action plan assigned yet.</Text>
       )}
+
+      {intervention.isTier3 && isPendingApproval && (
+        <View style={styles.completionInfoBox}>
+          <Text style={styles.completionInfoTitle}>
+            Completion request pending teacher approval
+          </Text>
+          <Text style={styles.completionInfoMeta}>
+            {intervention.completionRequestedAtLabel ||
+              "Awaiting teacher review."}
+          </Text>
+          {!!intervention.completionRequestNotes && (
+            <Text style={styles.completionInfoMeta}>
+              Notes: {intervention.completionRequestNotes}
+            </Text>
+          )}
+        </View>
+      )}
+
+      {intervention.isTier3 &&
+        intervention.rejectedAt &&
+        !intervention.hasCompletionRequest && (
+          <View style={styles.rejectedInfoBox}>
+            <Text style={styles.rejectedInfoTitle}>
+              Previous completion request was not approved
+            </Text>
+            <Text style={styles.rejectedInfoMeta}>
+              Rejected on {intervention.rejectedAt}
+            </Text>
+            {!!intervention.rejectionReason && (
+              <Text style={styles.rejectedInfoMeta}>
+                Reason: {intervention.rejectionReason}
+              </Text>
+            )}
+          </View>
+        )}
+
+      {intervention.status === "completed" && intervention.approvedAt && (
+        <View style={styles.approvedInfoBox}>
+          <Text style={styles.approvedInfoTitle}>Intervention Completed</Text>
+          <Text style={styles.completionInfoMeta}>
+            Approved on {intervention.approvedAt}
+          </Text>
+        </View>
+      )}
+
+      {intervention.canRequestCompletion &&
+        !intervention.hasCompletionRequest && (
+          <View style={styles.completionRequestBox}>
+            <Text style={styles.completionRequestText}>
+              This Tier 3 intervention is eligible for completion review.
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.completionRequestBtn,
+                requestingCompletion && styles.completionRequestBtnDisabled,
+              ]}
+              onPress={() => onRequestCompletion(intervention)}
+              disabled={requestingCompletion}
+            >
+              {requestingCompletion ? (
+                <ActivityIndicator color="#FFF" size="small" />
+              ) : (
+                <Text style={styles.completionRequestBtnText}>
+                  Request Completion Review
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
     </View>
   );
 };
@@ -889,6 +1155,8 @@ const styles = StyleSheet.create({
   },
   metaItem: { flexDirection: "row", alignItems: "center", gap: 4 },
   metaText: { fontSize: 12, color: "#6B7280" },
+  deadlineMetaText: { color: "#D97706", fontWeight: "600" },
+  deadlineMetaTextOverdue: { color: "#DC2626", fontWeight: "600" },
 
   notesBox: {
     backgroundColor: "#F9FAFB",
@@ -897,6 +1165,37 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   notesText: { fontSize: 13, color: "#4B5563", lineHeight: 18 },
+  deadlineInfoBox: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  deadlineInfoBoxUpcoming: {
+    backgroundColor: "#FFFBEB",
+    borderColor: "#FDE68A",
+  },
+  deadlineInfoBoxOverdue: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+  },
+  deadlineInfoTitle: {
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 18,
+  },
+  deadlineInfoTitleUpcoming: {
+    color: "#B45309",
+  },
+  deadlineInfoTitleOverdue: {
+    color: "#B91C1C",
+  },
+  deadlineInfoLabel: {
+    marginTop: 2,
+    fontSize: 12,
+    fontWeight: "500",
+  },
 
   miniStatsRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
   miniStat: { flex: 1, borderRadius: 10, padding: 10, alignItems: "center" },
@@ -929,6 +1228,178 @@ const styles = StyleSheet.create({
   },
   progressFill: { height: "100%", backgroundColor: "#DB2777", borderRadius: 4 },
   noTasksText: { fontSize: 13, color: "#9CA3AF", fontStyle: "italic" },
+  completionRequestBox: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: "#FFF1F2",
+    borderWidth: 1,
+    borderColor: "#FBCFE8",
+  },
+  completionRequestText: {
+    fontSize: 12,
+    color: "#9D174D",
+    marginBottom: 8,
+    lineHeight: 18,
+  },
+  completionRequestBtn: {
+    backgroundColor: "#DB2777",
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  completionRequestBtnDisabled: {
+    opacity: 0.7,
+  },
+  completionRequestBtnText: {
+    color: "#FFF",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  completionInfoBox: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+  },
+  completionInfoTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#1D4ED8",
+    marginBottom: 4,
+  },
+  completionInfoMeta: {
+    fontSize: 12,
+    color: "#1E40AF",
+    lineHeight: 18,
+  },
+  rejectedInfoBox: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+  },
+  rejectedInfoTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#B91C1C",
+    marginBottom: 4,
+  },
+  rejectedInfoMeta: {
+    fontSize: 12,
+    color: "#991B1B",
+    lineHeight: 18,
+  },
+  approvedInfoBox: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: "#ECFDF5",
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+  },
+  approvedInfoTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#047857",
+    marginBottom: 4,
+  },
+
+  // Completion request modal
+  completionModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  completionModalCard: {
+    width: "100%",
+    maxWidth: 420,
+    backgroundColor: "#FFF",
+    borderRadius: 20,
+    padding: 16,
+  },
+  completionModalHeader: {
+    marginBottom: 10,
+  },
+  completionModalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  completionModalSubtitle: {
+    marginTop: 2,
+    fontSize: 13,
+    color: "#DB2777",
+    fontWeight: "600",
+  },
+  completionModalBodyText: {
+    fontSize: 13,
+    color: "#4B5563",
+    lineHeight: 19,
+    marginBottom: 12,
+  },
+  inputLabel: {
+    fontSize: 12,
+    color: "#374151",
+    fontWeight: "600",
+    marginBottom: 6,
+  },
+  completionNotesInput: {
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 12,
+    padding: 10,
+    minHeight: 92,
+    fontSize: 13,
+    color: "#111827",
+    backgroundColor: "#FFF",
+  },
+  completionCounter: {
+    marginTop: 4,
+    textAlign: "right",
+    fontSize: 11,
+    color: "#9CA3AF",
+  },
+  completionModalActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 14,
+  },
+  completionCancelBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 10,
+    paddingVertical: 11,
+    alignItems: "center",
+  },
+  completionCancelBtnText: {
+    color: "#374151",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  completionSubmitBtn: {
+    flex: 1,
+    backgroundColor: "#059669",
+    borderRadius: 10,
+    paddingVertical: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  completionSubmitBtnDisabled: {
+    opacity: 0.7,
+  },
+  completionSubmitBtnText: {
+    color: "#FFF",
+    fontSize: 13,
+    fontWeight: "600",
+  },
 
   // Feedback Card
   feedbackCard: {

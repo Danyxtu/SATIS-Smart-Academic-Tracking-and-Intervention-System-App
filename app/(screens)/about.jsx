@@ -69,12 +69,12 @@ const About = () => {
       route: "/intervention",
     },
     {
-      title: "Subject at Risk",
+      title: "Performance Risk Overview",
       description:
-        "Identify subjects that need attention and get recommendations to improve.",
+        "Open Performance Analytics to view subjects that need attention and get recommendations to improve.",
       icon: AlertTriangle,
       gradientColors: ["#EF4444", "#DC2626"],
-      route: "/subject",
+      route: "/performance?risk=at-risk",
     },
   ];
 

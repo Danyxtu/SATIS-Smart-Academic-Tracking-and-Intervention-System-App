@@ -105,24 +105,78 @@ const PerformanceAnalytics = () => {
     }
   };
 
+  const getRiskCategory = (subject) => {
+    if (subject?.riskCategory) {
+      return subject.riskCategory;
+    }
+
+    const status = String(subject?.status || "").toLowerCase();
+    const grade = subject?.grade;
+
+    if (status === "critical" || (grade !== null && grade < 70)) {
+      return "at_risk";
+    }
+
+    if (status === "warning" || (grade !== null && grade >= 70 && grade < 75)) {
+      return "needs_attention";
+    }
+
+    return "on_track";
+  };
+
+  const riskCounts = subjects.reduce(
+    (acc, subject) => {
+      const category = getRiskCategory(subject);
+      if (category === "at_risk") acc.atRisk += 1;
+      if (category === "needs_attention") acc.needsAttention += 1;
+      if (category === "recent_decline") acc.recentDecline += 1;
+      if (category === "on_track") acc.onTrack += 1;
+      return acc;
+    },
+    { atRisk: 0, needsAttention: 0, recentDecline: 0, onTrack: 0 },
+  );
+  riskCounts.priority =
+    riskCounts.atRisk + riskCounts.needsAttention + riskCounts.recentDecline;
+
   const filteredSubjects = subjects.filter((subject) => {
-    if (activeFilter === "excellent")
-      return subject.grade !== null && subject.grade >= 90;
-    if (activeFilter === "good")
-      return (
-        subject.grade !== null && subject.grade >= 85 && subject.grade < 90
+    const riskCategory = getRiskCategory(subject);
+
+    if (activeFilter === "at-risk") {
+      return ["at_risk", "needs_attention", "recent_decline"].includes(
+        riskCategory,
       );
-    if (activeFilter === "at-risk")
-      return subject.grade !== null && subject.grade < 75;
+    }
+
+    if (activeFilter === "needs_attention") {
+      return riskCategory === "needs_attention";
+    }
+
+    if (activeFilter === "at_risk") {
+      return riskCategory === "at_risk";
+    }
+
+    if (activeFilter === "recent_decline") {
+      return riskCategory === "recent_decline";
+    }
+
+    if (activeFilter === "on_track") {
+      return riskCategory === "on_track";
+    }
+
     return true;
   });
 
   const getStatusMessage = () => {
-    if (stats.subjectsAtRisk > 0) {
+    const totalPrioritySubjects =
+      (stats.subjectsAtRisk || 0) +
+      (stats.subjectsNeedingAttention || 0) +
+      (stats.subjectsRecentDecline || 0);
+
+    if (totalPrioritySubjects > 0) {
       return {
         icon: "alert",
         title: "Needs Attention",
-        message: `You have ${stats.subjectsAtRisk} subject(s) at risk. Focus on improving these areas.`,
+        message: `You have ${totalPrioritySubjects} subject(s) in priority watch statuses. Focus on these areas first.`,
         color: "#FEF3C7",
         textColor: "#92400E",
       };
@@ -273,9 +327,20 @@ const PerformanceAnalytics = () => {
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {[
               { key: "all", label: "All Subjects" },
-              { key: "excellent", label: "Excellent (90+)" },
-              { key: "good", label: "Good (85-89)" },
-              { key: "at-risk", label: "At Risk (<75)" },
+              {
+                key: "at-risk",
+                label: `Priority (${riskCounts.priority})`,
+              },
+              { key: "at_risk", label: `At Risk (${riskCounts.atRisk})` },
+              {
+                key: "needs_attention",
+                label: `Needs Attention (${riskCounts.needsAttention})`,
+              },
+              {
+                key: "recent_decline",
+                label: `Recent Decline (${riskCounts.recentDecline})`,
+              },
+              { key: "on_track", label: `On Track (${riskCounts.onTrack})` },
             ].map((filter) => (
               <TouchableOpacity
                 key={filter.key}

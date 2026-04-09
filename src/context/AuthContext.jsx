@@ -144,10 +144,19 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
-    setUser(null);
-    setMustChangePassword(false);
-    await SecureStore.deleteItemAsync("user_session");
-    delete axios.defaults.headers.common["Authorization"];
+    try {
+      await axios.post(`/logout`);
+    } catch (err) {
+      console.warn(
+        "[AuthContext] logout request failed:",
+        err?.response || err,
+      );
+    } finally {
+      setUser(null);
+      setMustChangePassword(false);
+      await SecureStore.deleteItemAsync("user_session");
+      delete axios.defaults.headers.common["Authorization"];
+    }
   };
 
   return (

@@ -14,9 +14,6 @@ import {
   AlertTriangle,
   ClipboardCheck,
   BookCheck,
-  BarChart2,
-  CheckSquare,
-  TrendingUp,
 } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import Mainmenu from "../../src/components/MainMenu";
@@ -36,6 +33,12 @@ const getGreeting = () => {
   return "Good Evening";
 };
 
+const normalizeList = (value) => {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === "object") return Object.values(value);
+  return [];
+};
+
 export default function Home() {
   const router = useRouter();
   const [data, setData] = useState(null);
@@ -44,15 +47,56 @@ export default function Home() {
   const [error, setError] = useState(null);
   const [greeting, setGreeting] = useState(getGreeting());
   const [selectedSemester, setSelectedSemester] = useState(null);
+  const [showAllNotifications, setShowAllNotifications] = useState(false);
 
   const fetchDashboard = useCallback(async (semester = null) => {
     try {
       const params = semester ? { semester } : {};
       const res = await axios.get(`/student/dashboard`, { params });
-      setData(res.data);
+      let dashboardData = res.data || {};
+      let dashboardSubjects = normalizeList(dashboardData?.subjectPerformance);
+
+      // Fallback: if dashboard response has no subject cards, use performance endpoint
+      // so subject tiles still render for students with valid enrollments.
+      if (dashboardSubjects.length === 0) {
+        try {
+          const perfRes = await axios.get(`/student/performance`, { params });
+          const perfSubjects = normalizeList(perfRes.data?.subjectPerformance);
+
+          if (perfSubjects.length > 0) {
+            dashboardSubjects = perfSubjects;
+            dashboardData = {
+              ...dashboardData,
+              subjectPerformance: perfSubjects,
+              stats: {
+                ...(dashboardData?.stats || {}),
+                totalSubjects:
+                  (dashboardData?.stats?.totalSubjects || 0) > 0
+                    ? dashboardData.stats.totalSubjects
+                    : (perfRes.data?.stats?.totalSubjects ??
+                      perfSubjects.length),
+              },
+            };
+          }
+        } catch (fallbackErr) {
+          console.warn(
+            "Home: subjectPerformance fallback failed",
+            fallbackErr?.response || fallbackErr,
+          );
+        }
+      }
+
+      if (!Array.isArray(dashboardData?.subjectPerformance)) {
+        dashboardData = {
+          ...dashboardData,
+          subjectPerformance: dashboardSubjects,
+        };
+      }
+
+      setData(dashboardData);
       // Set initial semester from response if not already set
-      if (semester === null && res.data?.semesters?.selected) {
-        setSelectedSemester(res.data.semesters.selected);
+      if (semester === null && dashboardData?.semesters?.selected) {
+        setSelectedSemester(dashboardData.semesters.selected);
       }
     } catch (err) {
       console.warn("Home: failed to load dashboard", err?.response || err);
@@ -96,9 +140,10 @@ export default function Home() {
       // update local state
       setData((prev) => {
         if (!prev) return prev;
+        const previousNotifications = normalizeList(prev.notifications);
         return {
           ...prev,
-          notifications: prev.notifications.map((n) =>
+          notifications: previousNotifications.map((n) =>
             n.id === notificationId ? { ...n, isRead: true } : n,
           ),
           unreadNotificationCount: Math.max(
@@ -117,9 +162,10 @@ export default function Home() {
       await axios.post(`/student/notifications/read-all`);
       setData((prev) => {
         if (!prev) return prev;
+        const previousNotifications = normalizeList(prev.notifications);
         return {
           ...prev,
-          notifications: (prev.notifications || []).map((n) => ({
+          notifications: previousNotifications.map((n) => ({
             ...n,
             isRead: true,
           })),
@@ -130,6 +176,16 @@ export default function Home() {
       console.warn("Failed to mark all read", err?.response || err);
     }
   };
+
+  const subjectPerformance = normalizeList(data?.subjectPerformance);
+  const notifications = normalizeList(data?.notifications);
+  const upcomingTasks = normalizeList(data?.upcomingTasks);
+
+  const totalNotifications = notifications.length;
+  const unreadNotificationCount = data?.unreadNotificationCount || 0;
+  const displayedNotifications = showAllNotifications
+    ? notifications
+    : notifications.slice(0, 3);
 
   if (loading && !refreshing) {
     return (
@@ -205,7 +261,12 @@ export default function Home() {
             <Text style={styles.statLabel}>Attendance</Text>
           </View>
           <TouchableOpacity
-            onPress={() => router.push("/subject")}
+            onPress={() =>
+              router.push({
+                pathname: "/performance",
+                params: { risk: "at-risk" },
+              })
+            }
             style={styles.statCard}
             activeOpacity={0.7}
           >
@@ -214,6 +275,9 @@ export default function Home() {
               {data?.stats?.subjectsAtRisk ?? 0}
             </Text>
             <Text style={styles.statLabel}>At Risk</Text>
+            <Text style={styles.statSubLabel}>
+              of {data?.stats?.totalSubjects ?? 0} subjects
+            </Text>
           </TouchableOpacity>
           <View style={styles.statCard}>
             <BookCheck size={24} color="#6366F1" />
@@ -221,71 +285,6 @@ export default function Home() {
               {data?.stats?.completedTasks ?? 0}/{data?.stats?.totalTasks ?? 0}
             </Text>
             <Text style={styles.statLabel}>Tasks Done</Text>
-          </View>
-        </View>
-
-        {/* Performance Overview */}
-        <View style={styles.performanceCard}>
-          <View style={styles.performanceHeader}>
-            <BarChart2 size={20} color="#DB2777" />
-            <Text style={styles.performanceTitle}>Performance Overview</Text>
-          </View>
-          <View style={styles.performanceItem}>
-            <Text style={styles.performanceLabel}>Academic Performance</Text>
-            <View style={styles.progressBar}>
-              <View
-                style={[
-                  styles.progress,
-                  { width: `${data?.stats?.overallGrade ?? 0}%` },
-                ]}
-              />
-            </View>
-            <Text style={styles.progressText}>
-              {data?.stats?.overallGrade ?? "N/A"}%
-            </Text>
-          </View>
-          <View style={styles.performanceItem}>
-            <Text style={styles.performanceLabel}>Attendance Rate</Text>
-            <View style={styles.progressBar}>
-              <View
-                style={[
-                  styles.progress,
-                  { width: `${data?.stats?.overallAttendance ?? 0}%` },
-                ]}
-              />
-            </View>
-            <Text style={styles.progressText}>
-              {data?.stats?.overallAttendance ?? "N/A"}%
-            </Text>
-          </View>
-          <View style={[styles.performanceItem, { marginBottom: 0 }]}>
-            <Text style={styles.performanceLabel}>Task Completion</Text>
-            <View style={styles.progressBar}>
-              <View
-                style={[
-                  styles.progress,
-                  {
-                    width:
-                      data?.stats?.totalTasks > 0
-                        ? `${Math.round(
-                            (data?.stats?.completedTasks /
-                              (data?.stats?.totalTasks || 1)) *
-                              100,
-                          )}%`
-                        : "0%",
-                  },
-                ]}
-              />
-            </View>
-            <Text style={styles.progressText}>
-              {data?.stats?.totalTasks > 0
-                ? `${Math.round(
-                    (data?.stats?.completedTasks /
-                      (data?.stats?.totalTasks || 1)) *
-                      100,
-                  )}%`
-                : "N/A"}
-            </Text>
           </View>
         </View>
 
@@ -315,13 +314,12 @@ export default function Home() {
               justifyContent: "space-between",
             }}
           >
-            {(data?.subjectPerformance || []).slice(0, 4).map((subject) => (
+            {subjectPerformance.slice(0, 4).map((subject) => (
               <View key={subject.id} style={{ width: "48%", marginBottom: 12 }}>
                 <SubjectCard subject={subject} />
               </View>
             ))}
-            {(!data?.subjectPerformance ||
-              data.subjectPerformance.length === 0) && (
+            {subjectPerformance.length === 0 && (
               <View
                 style={{
                   padding: 16,
@@ -337,25 +335,20 @@ export default function Home() {
           </View>
         </View>
 
-        {/* Grade Trend & Pending Tasks - Stacked for mobile */}
+        {/* Grade Trend & Pending Tasks */}
         <View style={{ marginBottom: 16 }}>
           {/* Grade Trend */}
           <View style={styles.trendSection}>
-            <View style={styles.trendHeader}>
-              <TrendingUp size={18} color="#DB2777" />
-              <Text style={styles.trendTitle}>Grade Trend</Text>
-            </View>
+            <Text style={styles.trendTitle}>Grade Trend</Text>
             {data?.gradeTrend?.subjectName ? (
               <Text style={styles.trendSubtitle}>
                 <Text style={{ fontWeight: "600", color: "#6366F1" }}>
                   {data.gradeTrend.subjectName}
                 </Text>
-                {" — last updated"}
+                {" trend"}
               </Text>
             ) : (
-              <Text style={styles.trendSubtitle}>
-                Score breakdown by category
-              </Text>
+              <Text style={styles.trendSubtitle}>Score by category</Text>
             )}
             <MiniChart data={data?.gradeTrend || {}} />
           </View>
@@ -382,59 +375,65 @@ export default function Home() {
                 marginBottom: 10,
               }}
             >
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+              <Text
+                style={{ fontSize: 14, fontWeight: "700", color: "#111827" }}
               >
-                <CheckSquare size={18} color="#DB2777" />
-                <Text
-                  style={{ fontSize: 14, fontWeight: "700", color: "#111827" }}
-                >
-                  Pending Tasks
-                </Text>
-              </View>
+                Pending Tasks
+              </Text>
               <View
                 style={{
-                  backgroundColor: "#FCE7F3",
+                  backgroundColor: "#DBEAFE",
                   paddingHorizontal: 8,
-                  paddingVertical: 4,
+                  paddingVertical: 3,
                   borderRadius: 10,
                 }}
               >
                 <Text
-                  style={{ fontSize: 11, color: "#DB2777", fontWeight: "600" }}
+                  style={{ fontSize: 11, color: "#1D4ED8", fontWeight: "600" }}
                 >
-                  {(data?.upcomingTasks || []).length} pending
+                  {upcomingTasks.length} pending
                 </Text>
               </View>
             </View>
-            {(data?.upcomingTasks || []).length > 0 ? (
-              (data.upcomingTasks || []).slice(0, 3).map((task, index) => (
+            {upcomingTasks.length > 0 ? (
+              upcomingTasks.map((task, index) => (
                 <View
                   key={task.id}
                   style={{
+                    flexDirection: "row",
+                    alignItems: "flex-start",
+                    gap: 10,
                     paddingVertical: 10,
-                    borderBottomWidth:
-                      index < Math.min((data.upcomingTasks || []).length, 3) - 1
-                        ? 1
-                        : 0,
+                    borderBottomWidth: index < upcomingTasks.length - 1 ? 1 : 0,
                     borderBottomColor: "#F3F4F6",
                   }}
                 >
-                  <Text
+                  <View
                     style={{
-                      fontSize: 13,
-                      color: "#111827",
-                      fontWeight: "500",
+                      width: 14,
+                      height: 14,
+                      marginTop: 2,
+                      borderRadius: 3,
+                      borderWidth: 1.5,
+                      borderColor: "#D1D5DB",
                     }}
-                    numberOfLines={1}
-                  >
-                    {task.description}
-                  </Text>
-                  <Text
-                    style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}
-                  >
-                    {task.subject}
-                  </Text>
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        color: "#111827",
+                        fontWeight: "500",
+                      }}
+                    >
+                      {task.description}
+                    </Text>
+                    <Text
+                      style={{ fontSize: 11, color: "#6B7280", marginTop: 3 }}
+                    >
+                      {task.subject}
+                    </Text>
+                  </View>
                 </View>
               ))
             ) : (
@@ -460,38 +459,102 @@ export default function Home() {
               marginBottom: 10,
             }}
           >
-            <Text style={{ fontSize: 16, fontWeight: "700", color: "#111827" }}>
-              Notifications
-            </Text>
-            {(data?.notifications || []).length > 0 && (
-              <View
-                style={{
-                  backgroundColor: "#FEE2E2",
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
-                  borderRadius: 10,
-                }}
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+            >
+              <Text
+                style={{ fontSize: 16, fontWeight: "700", color: "#111827" }}
               >
-                <Text
-                  style={{ fontSize: 11, color: "#DC2626", fontWeight: "600" }}
+                Notifications
+              </Text>
+              {unreadNotificationCount > 0 && (
+                <View
+                  style={{
+                    backgroundColor: "#EF4444",
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                    borderRadius: 999,
+                  }}
                 >
-                  {data?.unreadNotificationCount || 0} new
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      color: "#FFFFFF",
+                      fontWeight: "700",
+                    }}
+                  >
+                    {unreadNotificationCount > 99
+                      ? "99+"
+                      : unreadNotificationCount}
+                  </Text>
+                </View>
+              )}
+            </View>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+            >
+              {unreadNotificationCount > 0 && (
+                <TouchableOpacity onPress={markAllNotificationsRead}>
+                  <Text
+                    style={{
+                      color: "#6366F1",
+                      fontWeight: "600",
+                      fontSize: 12,
+                    }}
+                  >
+                    Mark all read
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity onPress={() => router.push("/intervention")}>
+                <Text
+                  style={{ color: "#6B7280", fontWeight: "600", fontSize: 12 }}
+                >
+                  View all →
                 </Text>
-              </View>
-            )}
+              </TouchableOpacity>
+            </View>
           </View>
-          {(data?.notifications || []).length > 0 ? (
-            (data.notifications || []).slice(0, 3).map((n) => (
-              <NotificationItem
-                key={n.id}
-                notification={n}
-                onPress={async () => {
-                  await markNotificationRead(n.id);
-                  router.push(`/intervention?highlight=${n.id}`);
-                }}
-                onMarkRead={async (id) => await markNotificationRead(id)}
-              />
-            ))
+          {totalNotifications > 0 ? (
+            <View>
+              {displayedNotifications.map((n) => (
+                <NotificationItem
+                  key={n.id}
+                  notification={n}
+                  onPress={async () => {
+                    await markNotificationRead(n.id);
+                    router.push(`/intervention?highlight=${n.id}`);
+                  }}
+                  onMarkRead={async (id) => await markNotificationRead(id)}
+                />
+              ))}
+
+              {totalNotifications > 3 && (
+                <TouchableOpacity
+                  onPress={() => setShowAllNotifications((prev) => !prev)}
+                  style={{
+                    marginTop: 4,
+                    paddingVertical: 8,
+                    borderRadius: 10,
+                    alignItems: "center",
+                    backgroundColor: "#EEF2FF",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "#4F46E5",
+                      fontWeight: "600",
+                      fontSize: 12,
+                    }}
+                  >
+                    {showAllNotifications
+                      ? "Show Less"
+                      : `View ${totalNotifications - 3} More`}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           ) : (
             <View
               style={{
@@ -534,9 +597,14 @@ export default function Home() {
             gradientColor="#DB2777"
           />
           <QuickActionCard
-            title="Subjects at Risk"
-            description="View struggling areas"
-            onPress={() => router.push("/subject")}
+            title="At-Risk Subjects"
+            description="Review risk overview"
+            onPress={() =>
+              router.push({
+                pathname: "/performance",
+                params: { risk: "at-risk" },
+              })
+            }
             gradientColor="#EF4444"
           />
         </View>

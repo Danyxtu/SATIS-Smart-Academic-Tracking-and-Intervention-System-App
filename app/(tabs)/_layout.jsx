@@ -13,7 +13,6 @@ export default function TabsLayout() {
       <Stack.Screen name="attendance" />
       <Stack.Screen name="performance" />
       <Stack.Screen name="intervention" />
-      <Stack.Screen name="subject" />
     </Stack>
   );
 }

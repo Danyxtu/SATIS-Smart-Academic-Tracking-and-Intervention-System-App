@@ -1,49 +1,60 @@
+import React, { useEffect, useState } from "react";
 import {
   Text,
   View,
   TouchableOpacity,
+  Modal,
+  Pressable,
+  Image,
   Animated,
   Dimensions,
-  Modal,
   ScrollView,
 } from "react-native";
-import React, { useState, useEffect, useRef } from "react";
-import { Ionicons } from "@expo/vector-icons";
 import {
+  ChevronDown,
+  User,
+  LogOut,
+  Menu,
+  X,
   Home,
+  Lightbulb,
   ClipboardList,
   BarChart3,
   MessageCircle,
-  AlertTriangle,
-  User,
-  Info,
-  LogOut,
-  X,
-  Menu,
 } from "lucide-react-native";
 import { useRouter, usePathname } from "expo-router";
-import styles from "@styles/mainMenu";
 import axios from "axios";
+import styles from "@styles/mainMenu";
 import { useAuth } from "../context/AuthContext";
+import SchoolLogo from "@assets/school-logo.png";
+import SatisLogo from "@assets/satis-logo.png";
 
 function Mainmenu() {
   const router = useRouter();
   const pathname = usePathname();
   const { logout } = useAuth();
+  const width = Dimensions.get("window").width;
+
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const [studentData, setStudentData] = useState(null);
-  const width = Dimensions.get("window").width;
-  const translateX = useRef(new Animated.Value(-width * 0.85)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
 
-  // Navigation items configuration
+  const drawerTranslateX = useState(new Animated.Value(-width * 0.85))[0];
+  const drawerBackdropOpacity = useState(new Animated.Value(0))[0];
+
   const navigationItems = [
     {
       label: "Dashboard",
       icon: Home,
       route: "/home",
       color: "#DB2777",
+    },
+    {
+      label: "Learn More",
+      icon: Lightbulb,
+      route: "/about",
+      color: "#D97706",
     },
     {
       label: "Attendance",
@@ -63,332 +74,349 @@ function Mainmenu() {
       route: "/intervention",
       color: "#059669",
     },
-    {
-      label: "Subjects at Risk",
-      icon: AlertTriangle,
-      route: "/subject",
-      color: "#DC2626",
-    },
   ];
 
-  const secondaryItems = [
-    {
-      label: "Profile",
-      icon: User,
-      route: "/profile",
-      color: "#6B7280",
-    },
-    {
-      label: "About SATIS",
-      icon: Info,
-      route: "/about",
-      color: "#6B7280",
-    },
-  ];
-
-  // Fetch student data for the header
   useEffect(() => {
     const fetchStudentData = async () => {
       try {
         const res = await axios.get("/student/dashboard");
-        setStudentData(res.data?.student);
+        setStudentData(res.data?.student || null);
       } catch (err) {
-        console.warn("MainMenu: Failed to fetch student data", err);
+        console.warn(
+          "MainMenu: Failed to fetch student data",
+          err?.response || err,
+        );
       }
     };
+
     fetchStudentData();
   }, []);
-
-  // Get initials from first name and last name
-  const getInitials = () => {
-    const firstName = studentData?.firstName || "";
-    const lastName = studentData?.lastName || "";
-    const firstInitial = firstName.charAt(0).toUpperCase();
-    const lastInitial = lastName.charAt(0).toUpperCase();
-    return firstInitial + lastInitial || "ST";
-  };
-
-  // Get full name
-  const getFullName = () => {
-    const firstName = studentData?.firstName || "";
-    const lastName = studentData?.lastName || "";
-    return `${firstName} ${lastName}`.trim() || "Student";
-  };
-
-  // Get grade level display
-  const getGradeDisplay = () => {
-    const gradeLevel = studentData?.gradeLevel;
-    return gradeLevel ? `Grade ${gradeLevel}` : "Student";
-  };
-
-  // Get strand/section display
-  const getStrandDisplay = () => {
-    return studentData?.strand || studentData?.section || "";
-  };
-
-  // Check if route is active
-  const isActiveRoute = (route) => {
-    return pathname === route || pathname.startsWith(route + "/");
-  };
 
   useEffect(() => {
     if (drawerOpen) {
       Animated.parallel([
-        Animated.timing(translateX, {
+        Animated.timing(drawerTranslateX, {
           toValue: 0,
-          duration: 280,
+          duration: 250,
           useNativeDriver: true,
         }),
-        Animated.timing(opacity, {
+        Animated.timing(drawerBackdropOpacity, {
           toValue: 1,
-          duration: 280,
+          duration: 250,
           useNativeDriver: true,
         }),
       ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(translateX, {
-          toValue: -width * 0.85,
-          duration: 240,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue: 0,
-          duration: 240,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      return;
     }
-  }, [drawerOpen]);
+
+    Animated.parallel([
+      Animated.timing(drawerTranslateX, {
+        toValue: -width * 0.85,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+      Animated.timing(drawerBackdropOpacity, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [drawerOpen, drawerTranslateX, drawerBackdropOpacity, width]);
+
+  const getInitials = () => {
+    let firstName = (studentData?.firstName || "").trim();
+    let middleName = (
+      studentData?.middleInitial ||
+      studentData?.middleName ||
+      studentData?.middle_name ||
+      ""
+    ).trim();
+    let lastName = (studentData?.lastName || "").trim();
+
+    const fallbackName = (
+      studentData?.fullName ||
+      studentData?.displayName ||
+      ""
+    ).trim();
+    if ((!firstName || !lastName || !middleName) && fallbackName) {
+      const parts = fallbackName.split(/\s+/).filter(Boolean);
+      if (!firstName && parts.length > 0) firstName = parts[0];
+      if (!lastName && parts.length > 1) lastName = parts[parts.length - 1];
+      if (!middleName && parts.length > 2)
+        middleName = parts.slice(1, -1).join(" ");
+    }
+
+    const firstInitial = (firstName.charAt(0) || "S").toUpperCase();
+    const secondSource = lastName || middleName || "T";
+    const lastInitial = (secondSource.charAt(0) || "T").toUpperCase();
+    return `${firstInitial}${lastInitial}`;
+  };
+
+  const getFullName = () => {
+    let firstName = (studentData?.firstName || "").trim();
+    let middleName = (
+      studentData?.middleInitial ||
+      studentData?.middleName ||
+      studentData?.middle_name ||
+      ""
+    ).trim();
+    let lastName = (studentData?.lastName || "").trim();
+
+    const fallbackName = (
+      studentData?.fullName ||
+      studentData?.displayName ||
+      ""
+    ).trim();
+    if ((!firstName || !lastName || !middleName) && fallbackName) {
+      const parts = fallbackName.split(/\s+/).filter(Boolean);
+      if (!firstName && parts.length > 0) firstName = parts[0];
+      if (!lastName && parts.length > 1) lastName = parts[parts.length - 1];
+      if (!middleName && parts.length > 2)
+        middleName = parts.slice(1, -1).join(" ");
+    }
+
+    const middleInitial = middleName
+      ? `${middleName.charAt(0).toUpperCase()}.`
+      : "";
+    const fullName = [firstName, middleInitial, lastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    return fullName || "Student";
+  };
+
+  const handleProfileOpen = () => {
+    setDrawerOpen(false);
+    setProfileMenuOpen((prev) => !prev);
+  };
+
+  const handleDrawerOpen = () => {
+    setProfileMenuOpen(false);
+    setDrawerOpen(true);
+  };
 
   const handleNavigation = (route) => {
     setDrawerOpen(false);
     setTimeout(() => {
       router.push(route);
-    }, 100);
+    }, 110);
+  };
+
+  const isActiveRoute = (route) =>
+    pathname === route || pathname.startsWith(`${route}/`);
+
+  const handleProfileNavigate = () => {
+    setProfileMenuOpen(false);
+    router.push("/profile");
   };
 
   const handleLogoutPress = () => {
-    setDrawerOpen(false);
-    setTimeout(() => {
-      setLogoutModalVisible(true);
-    }, 300);
+    setProfileMenuOpen(false);
+    setLogoutModalVisible(true);
   };
 
   const handleLogoutConfirm = async () => {
     setLogoutModalVisible(false);
-    logout();
+    await logout();
     router.replace("/(auth)/login");
-  };
-
-  const handleLogoutCancel = () => {
-    setLogoutModalVisible(false);
   };
 
   return (
     <>
-      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => setDrawerOpen(true)}
-          style={styles.menuButton}
-        >
-          <Menu size={26} color="#1f2937" strokeWidth={2} />
-        </TouchableOpacity>
-
-        <View style={styles.rightSection}>
+        <View style={styles.headerLeft}>
           <TouchableOpacity
-            style={styles.profileSection}
-            onPress={() => router.push("/profile")}
-            activeOpacity={0.7}
+            style={styles.menuButton}
+            onPress={handleDrawerOpen}
+            activeOpacity={0.8}
           >
-            {/* Avatar with Initials */}
-            <View style={styles.avatarContainer}>
-              <Text style={styles.avatarText}>{getInitials()}</Text>
-            </View>
-            <View>
-              <Text style={styles.grade}>{getGradeDisplay()}</Text>
-              {getStrandDisplay() ? (
-                <Text style={styles.stream}>{getStrandDisplay()}</Text>
-              ) : null}
-            </View>
+            <Menu size={21} color="#334155" strokeWidth={2.8} />
           </TouchableOpacity>
+
+          <Image source={SchoolLogo} style={styles.logo} resizeMode="contain" />
         </View>
+
+        <TouchableOpacity
+          style={styles.profileTrigger}
+          onPress={handleProfileOpen}
+          activeOpacity={0.8}
+        >
+          <View style={styles.avatarContainer}>
+            <Text style={styles.avatarText}>{getInitials()}</Text>
+          </View>
+          <Text style={styles.profileName} numberOfLines={1}>
+            {getFullName()}
+          </Text>
+          <ChevronDown size={15} color="#6B7280" />
+        </TouchableOpacity>
       </View>
 
-      {/* Drawer Modal */}
       <Modal
         visible={drawerOpen}
-        transparent={true}
+        transparent
         animationType="none"
         onRequestClose={() => setDrawerOpen(false)}
       >
-        <View style={styles.modalContainer}>
-          {/* Backdrop */}
-          <Animated.View style={[styles.drawerBackdrop, { opacity }]}>
-            <TouchableOpacity
-              style={styles.backdropTouchable}
-              activeOpacity={1}
+        <View style={styles.drawerModalRoot}>
+          <Animated.View
+            style={[styles.drawerBackdrop, { opacity: drawerBackdropOpacity }]}
+          >
+            <Pressable
+              style={styles.drawerBackdropPressable}
               onPress={() => setDrawerOpen(false)}
             />
           </Animated.View>
 
-          {/* Drawer */}
           <Animated.View
-            style={[styles.drawer, { transform: [{ translateX }] }]}
+            style={[
+              styles.drawerPanel,
+              { transform: [{ translateX: drawerTranslateX }] },
+            ]}
           >
-            {/* Drawer Header with User Info */}
             <View style={styles.drawerHeader}>
-              <View style={styles.drawerUserSection}>
-                <View style={styles.drawerAvatarContainer}>
-                  <Text style={styles.drawerAvatarText}>{getInitials()}</Text>
-                </View>
-                <View style={styles.drawerUserInfo}>
-                  <Text style={styles.drawerUserName}>{getFullName()}</Text>
-                  <Text style={styles.drawerUserGrade}>
-                    {getGradeDisplay()}
-                    {getStrandDisplay() ? ` • ${getStrandDisplay()}` : ""}
+              <View style={styles.drawerBrandBlock}>
+                <Image
+                  source={SatisLogo}
+                  style={styles.drawerBrandLogo}
+                  resizeMode="contain"
+                />
+                <View style={styles.drawerBrandTextWrap}>
+                  <Text style={styles.drawerBrandTitle} numberOfLines={1}>
+                    SATIS
+                    <Text style={styles.drawerBrandTitleAccent}>-FACTION</Text>
+                  </Text>
+                  <Text style={styles.drawerBrandSubtitle} numberOfLines={2}>
+                    Smart Academic Tracking and Intervention System
                   </Text>
                 </View>
               </View>
               <TouchableOpacity
+                style={styles.drawerCloseButton}
                 onPress={() => setDrawerOpen(false)}
-                style={styles.closeButton}
+                activeOpacity={0.75}
               >
-                <X size={24} color="#6B7280" strokeWidth={2} />
+                <X size={20} color="#64748B" />
               </TouchableOpacity>
             </View>
 
             <ScrollView
-              style={styles.drawerScrollView}
+              style={styles.drawerScroll}
+              contentContainerStyle={styles.drawerScrollContent}
               showsVerticalScrollIndicator={false}
             >
-              {/* Main Navigation Section */}
-              <View style={styles.drawerSection}>
-                <Text style={styles.sectionTitle}>NAVIGATION</Text>
-                {navigationItems.map((item, index) => {
-                  const IconComponent = item.icon;
-                  const isActive = isActiveRoute(item.route);
-                  return (
-                    <TouchableOpacity
-                      key={index}
+              {navigationItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = isActiveRoute(item.route);
+
+                return (
+                  <TouchableOpacity
+                    key={item.route}
+                    style={[
+                      styles.drawerItem,
+                      isActive && styles.drawerItemActive,
+                    ]}
+                    onPress={() => handleNavigation(item.route)}
+                    activeOpacity={0.75}
+                  >
+                    <View
                       style={[
-                        styles.drawerItem,
-                        isActive && styles.drawerItemActive,
+                        styles.drawerItemIconWrap,
+                        { backgroundColor: `${item.color}16` },
                       ]}
-                      onPress={() => handleNavigation(item.route)}
-                      activeOpacity={0.7}
                     >
-                      <View
-                        style={[
-                          styles.iconContainer,
-                          { backgroundColor: `${item.color}15` },
-                        ]}
-                      >
-                        <IconComponent
-                          size={20}
-                          color={isActive ? item.color : "#6B7280"}
-                          strokeWidth={2}
-                        />
-                      </View>
-                      <Text
-                        style={[
-                          styles.drawerItemText,
-                          isActive && { color: item.color, fontWeight: "700" },
-                        ]}
-                      >
-                        {item.label}
-                      </Text>
-                      {isActive && (
-                        <View
-                          style={[
-                            styles.activeIndicator,
-                            { backgroundColor: item.color },
-                          ]}
-                        />
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {/* Secondary Navigation Section */}
-              <View style={styles.drawerSection}>
-                <Text style={styles.sectionTitle}>SETTINGS</Text>
-                {secondaryItems.map((item, index) => {
-                  const IconComponent = item.icon;
-                  return (
-                    <TouchableOpacity
-                      key={index}
-                      style={styles.drawerItem}
-                      onPress={() => handleNavigation(item.route)}
-                      activeOpacity={0.7}
+                      <Icon
+                        size={18}
+                        color={isActive ? item.color : "#64748B"}
+                        strokeWidth={2}
+                      />
+                    </View>
+                    <Text
+                      style={[
+                        styles.drawerItemText,
+                        isActive && { color: item.color, fontWeight: "700" },
+                      ]}
                     >
-                      <View style={styles.iconContainerSecondary}>
-                        <IconComponent
-                          size={20}
-                          color="#6B7280"
-                          strokeWidth={2}
-                        />
-                      </View>
-                      <Text style={styles.drawerItemText}>{item.label}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {/* Logout Section */}
-              <View style={styles.drawerSection}>
-                <TouchableOpacity
-                  style={styles.logoutButton}
-                  onPress={handleLogoutPress}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.iconContainerLogout}>
-                    <LogOut size={20} color="#DC2626" strokeWidth={2} />
-                  </View>
-                  <Text style={styles.logoutText}>Logout</Text>
-                </TouchableOpacity>
-              </View>
+                      {item.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
           </Animated.View>
         </View>
       </Modal>
 
-      {/* Logout Confirmation Modal */}
+      <Modal
+        visible={profileMenuOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setProfileMenuOpen(false)}
+      >
+        <View style={styles.dropdownModalRoot}>
+          <Pressable
+            style={styles.dropdownBackdrop}
+            onPress={() => setProfileMenuOpen(false)}
+          />
+
+          <View style={styles.dropdownContainer}>
+            <View style={styles.dropdownCard}>
+              <View style={styles.dropdownHeader}>
+                <Text style={styles.dropdownName}>{getFullName()}</Text>
+                <Text style={styles.dropdownRole}>Student</Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.dropdownItem}
+                onPress={handleProfileNavigate}
+                activeOpacity={0.75}
+              >
+                <User size={16} color="#4B5563" />
+                <Text style={styles.dropdownItemText}>Profile</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.dropdownItem}
+                onPress={handleLogoutPress}
+                activeOpacity={0.75}
+              >
+                <LogOut size={16} color="#E11D48" />
+                <Text style={styles.dropdownItemTextDanger}>Logout</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <Modal
         visible={logoutModalVisible}
-        transparent={true}
+        transparent
         animationType="fade"
-        onRequestClose={handleLogoutCancel}
+        onRequestClose={() => setLogoutModalVisible(false)}
       >
         <View style={styles.confirmModalOverlay}>
           <View style={styles.confirmModalContainer}>
-            {/* Icon */}
             <View style={styles.confirmIconContainer}>
-              <LogOut size={32} color="#DC2626" strokeWidth={2} />
+              <LogOut size={30} color="#DC2626" strokeWidth={2} />
             </View>
 
-            {/* Title & Message */}
             <Text style={styles.confirmTitle}>Logout</Text>
             <Text style={styles.confirmMessage}>
-              Are you sure you want to logout? You'll need to sign in again to
-              access your account.
+              Are you sure you want to logout? You will need to sign in again.
             </Text>
 
-            {/* Buttons */}
             <View style={styles.confirmButtonRow}>
               <TouchableOpacity
                 style={styles.confirmCancelButton}
-                onPress={handleLogoutCancel}
-                activeOpacity={0.7}
+                onPress={() => setLogoutModalVisible(false)}
+                activeOpacity={0.75}
               >
                 <Text style={styles.confirmCancelText}>Cancel</Text>
               </TouchableOpacity>
+
               <TouchableOpacity
                 style={styles.confirmLogoutButton}
                 onPress={handleLogoutConfirm}
-                activeOpacity={0.7}
+                activeOpacity={0.75}
               >
                 <Text style={styles.confirmLogoutText}>Logout</Text>
               </TouchableOpacity>

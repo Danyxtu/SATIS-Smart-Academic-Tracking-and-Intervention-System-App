@@ -32,6 +32,7 @@ import {
   AlertCircle,
 } from "lucide-react-native";
 import axios from "axios";
+import { useAuth } from "@context/AuthContext";
 
 // --- Info Display Field Component (Read-only) ---
 const InfoField = ({ label, value, icon: Icon }) => (
@@ -296,14 +297,144 @@ const ChangePasswordModal = ({ visible, onClose }) => {
   );
 };
 
+// --- Delete Account Modal ---
+const DeleteAccountModal = ({ visible, onClose, onConfirm, loading }) => {
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!visible) {
+      setPassword("");
+      setShowPassword(false);
+      setError("");
+    }
+  }, [visible]);
+
+  const handleConfirm = async () => {
+    if (!password) {
+      setError("Password is required");
+      return;
+    }
+
+    const result = await onConfirm(password);
+    if (result?.success) {
+      setPassword("");
+      setError("");
+      onClose();
+      return;
+    }
+
+    setError(result?.message || "Failed to delete account");
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <View style={styles.modalHeaderLeft}>
+              <View style={styles.modalIconBoxDestructive}>
+                <AlertCircle color="#DC2626" size={22} />
+              </View>
+              <View>
+                <Text style={styles.modalTitle}>Delete Account</Text>
+                <Text style={styles.modalSubtitle}>
+                  This action cannot be undone
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+              <X color="#6B7280" size={22} />
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.destructiveMessage}>
+            Enter your current password to permanently delete your account.
+          </Text>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Current Password</Text>
+            <View style={styles.inputWrapper}>
+              <Key color="#9CA3AF" size={18} style={styles.inputIcon} />
+              <TextInput
+                style={styles.textInput}
+                placeholder="Enter current password"
+                placeholderTextColor="#9CA3AF"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword((prevValue) => !prevValue)}
+              >
+                {showPassword ? (
+                  <EyeOff color="#9CA3AF" size={18} />
+                ) : (
+                  <Eye color="#9CA3AF" size={18} />
+                )}
+              </TouchableOpacity>
+            </View>
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          </View>
+
+          <View style={styles.modalButtons}>
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={onClose}
+              disabled={loading}
+            >
+              <Text style={styles.cancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.destructiveBtn,
+                loading && styles.destructiveBtnDisabled,
+              ]}
+              onPress={handleConfirm}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFF" size="small" />
+              ) : (
+                <Text style={styles.destructiveBtnText}>Delete Account</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
 // --- Main Profile Component ---
 function StudentProfile() {
   const router = useRouter();
+  const { logout } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [requestReason, setRequestReason] = useState("");
+  const [submittingResetRequest, setSubmittingResetRequest] = useState(false);
+  const [cancellingResetRequest, setCancellingResetRequest] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    firstName: "",
+    middleName: "",
+    lastName: "",
+    email: "",
+  });
+  const [profileFormErrors, setProfileFormErrors] = useState({});
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileFeedback, setProfileFeedback] = useState(null);
 
   const fetchProfile = async (isRefresh = false) => {
     try {
@@ -325,8 +456,24 @@ function StudentProfile() {
     fetchProfile();
   }, []);
 
+  useEffect(() => {
+    if (!data) return;
+
+    const nextUser = data.user || {};
+    const nextStudent = data.student || {};
+
+    setProfileForm({
+      firstName: nextStudent.firstName || nextUser.firstName || "",
+      middleName: nextStudent.middleName || nextUser.middleName || "",
+      lastName: nextStudent.lastName || nextUser.lastName || "",
+      email: nextUser.email || "",
+    });
+    setProfileFormErrors({});
+  }, [data]);
+
   const user = data?.user || {};
   const student = data?.student || {};
+  const pendingPasswordReset = data?.pendingPasswordReset;
 
   // Get initials - using camelCase from API
   const getInitials = () => {
@@ -345,12 +492,175 @@ function StudentProfile() {
     return parts.join(" ") || user.name || "Student";
   };
 
-  // Get grade section display
-  const getGradeSection = () => {
-    const parts = [];
-    if (student.gradeLevel) parts.push(`Grade ${student.gradeLevel}`);
-    if (student.section) parts.push(student.section);
-    return parts.join(" - ") || "N/A";
+  const handleProfileFieldChange = (field, value) => {
+    setProfileForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+    setProfileFeedback(null);
+    setProfileFormErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
+
+  const handleSaveProfile = async () => {
+    const emailValue = profileForm.email.trim();
+    const firstNameValue = profileForm.firstName.trim();
+    const lastNameValue = profileForm.lastName.trim();
+
+    const nextErrors = {};
+    if (!firstNameValue) nextErrors.firstName = "First name is required.";
+    if (!lastNameValue) nextErrors.lastName = "Last name is required.";
+    if (!emailValue) {
+      nextErrors.email = "Email is required.";
+    } else if (!/^\S+@\S+\.\S+$/.test(emailValue)) {
+      nextErrors.email = "Enter a valid email address.";
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setProfileFormErrors(nextErrors);
+      setProfileFeedback({
+        type: "error",
+        message: "Please fix the highlighted fields.",
+      });
+      return;
+    }
+
+    try {
+      setSavingProfile(true);
+      setProfileFeedback(null);
+      setProfileFormErrors({});
+
+      const res = await axios.put("/student/profile", {
+        first_name: firstNameValue,
+        middle_name: profileForm.middleName.trim() || null,
+        last_name: lastNameValue,
+        email: emailValue,
+      });
+
+      setData(res.data);
+      setProfileFeedback({
+        type: "success",
+        message: res?.data?.message || "Profile updated successfully.",
+      });
+    } catch (err) {
+      const apiErrors = err?.response?.data?.errors || {};
+      setProfileFormErrors({
+        firstName: apiErrors?.first_name?.[0],
+        middleName: apiErrors?.middle_name?.[0],
+        lastName: apiErrors?.last_name?.[0],
+        email: apiErrors?.email?.[0],
+      });
+      setProfileFeedback({
+        type: "error",
+        message:
+          err?.response?.data?.message || "Failed to update profile details.",
+      });
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleRequestPasswordReset = async () => {
+    try {
+      setSubmittingResetRequest(true);
+
+      const payload = {};
+      if (requestReason.trim()) {
+        payload.reason = requestReason.trim();
+      }
+
+      const res = await axios.post(
+        "/student/profile/request-password-reset",
+        payload,
+      );
+
+      Alert.alert(
+        "Request Submitted",
+        res?.data?.message ||
+          "Your password reset request has been submitted for review.",
+      );
+      setRequestReason("");
+      await fetchProfile(true);
+    } catch (err) {
+      Alert.alert(
+        "Unable to Submit Request",
+        err?.response?.data?.message ||
+          "Failed to submit password reset request.",
+      );
+    } finally {
+      setSubmittingResetRequest(false);
+    }
+  };
+
+  const handleCancelPasswordReset = () => {
+    Alert.alert(
+      "Cancel Request",
+      "Do you want to cancel your pending password reset request?",
+      [
+        {
+          text: "No",
+          style: "cancel",
+        },
+        {
+          text: "Yes, Cancel",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setCancellingResetRequest(true);
+              const res = await axios.delete(
+                "/student/profile/cancel-password-reset",
+              );
+              Alert.alert(
+                "Request Cancelled",
+                res?.data?.message ||
+                  "Your pending password reset request has been cancelled.",
+              );
+              await fetchProfile(true);
+            } catch (err) {
+              Alert.alert(
+                "Unable to Cancel Request",
+                err?.response?.data?.message ||
+                  "Failed to cancel password reset request.",
+              );
+            } finally {
+              setCancellingResetRequest(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleDeleteAccount = async (password) => {
+    try {
+      setDeletingAccount(true);
+      const res = await axios.delete("/student/profile", {
+        data: { password },
+      });
+
+      await logout();
+      Alert.alert(
+        "Account Deleted",
+        res?.data?.message || "Your account has been deleted successfully.",
+      );
+      router.replace("/(auth)/login");
+
+      return { success: true };
+    } catch (err) {
+      return {
+        success: false,
+        message:
+          err?.response?.data?.errors?.password?.[0] ||
+          err?.response?.data?.message ||
+          "Failed to delete account.",
+      };
+    } finally {
+      setDeletingAccount(false);
+    }
   };
 
   if (loading) {
@@ -409,7 +719,9 @@ function StudentProfile() {
         {/* Page Title */}
         <View style={styles.pageHeader}>
           <Text style={styles.pageTitle}>My Profile</Text>
-          <Text style={styles.pageSubtitle}>View your account information</Text>
+          <Text style={styles.pageSubtitle}>
+            Manage your account information and security
+          </Text>
         </View>
 
         {/* Profile Header Card */}
@@ -477,12 +789,120 @@ function StudentProfile() {
         {/* Account Information */}
         <SectionCard
           title="Account Information"
-          description="Your login credentials"
+          description="Update your profile details and login email"
           icon={Mail}
         >
-          <View style={styles.infoGrid}>
-            <InfoField label="Display Name" value={user.name} icon={User} />
-            <InfoField label="Email Address" value={user.email} icon={Mail} />
+          <View style={styles.editFormGrid}>
+            <View style={styles.formField}>
+              <Text style={styles.formLabel}>First Name</Text>
+              <TextInput
+                style={styles.formInput}
+                value={profileForm.firstName}
+                onChangeText={(value) =>
+                  handleProfileFieldChange("firstName", value)
+                }
+                placeholder="Enter first name"
+                placeholderTextColor="#9CA3AF"
+              />
+              {profileFormErrors.firstName ? (
+                <Text style={styles.formErrorText}>
+                  {profileFormErrors.firstName}
+                </Text>
+              ) : null}
+            </View>
+
+            <View style={styles.formField}>
+              <Text style={styles.formLabel}>Middle Name (optional)</Text>
+              <TextInput
+                style={styles.formInput}
+                value={profileForm.middleName}
+                onChangeText={(value) =>
+                  handleProfileFieldChange("middleName", value)
+                }
+                placeholder="Enter middle name"
+                placeholderTextColor="#9CA3AF"
+              />
+              {profileFormErrors.middleName ? (
+                <Text style={styles.formErrorText}>
+                  {profileFormErrors.middleName}
+                </Text>
+              ) : null}
+            </View>
+
+            <View style={styles.formField}>
+              <Text style={styles.formLabel}>Last Name</Text>
+              <TextInput
+                style={styles.formInput}
+                value={profileForm.lastName}
+                onChangeText={(value) =>
+                  handleProfileFieldChange("lastName", value)
+                }
+                placeholder="Enter last name"
+                placeholderTextColor="#9CA3AF"
+              />
+              {profileFormErrors.lastName ? (
+                <Text style={styles.formErrorText}>
+                  {profileFormErrors.lastName}
+                </Text>
+              ) : null}
+            </View>
+
+            <View style={styles.formField}>
+              <Text style={styles.formLabel}>Email Address</Text>
+              <TextInput
+                style={styles.formInput}
+                value={profileForm.email}
+                onChangeText={(value) =>
+                  handleProfileFieldChange("email", value)
+                }
+                placeholder="Enter email"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+              {profileFormErrors.email ? (
+                <Text style={styles.formErrorText}>
+                  {profileFormErrors.email}
+                </Text>
+              ) : null}
+            </View>
+
+            {profileFeedback ? (
+              <View
+                style={[
+                  styles.formFeedback,
+                  profileFeedback.type === "success"
+                    ? styles.formFeedbackSuccess
+                    : styles.formFeedbackError,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.formFeedbackText,
+                    profileFeedback.type === "success"
+                      ? styles.formFeedbackTextSuccess
+                      : styles.formFeedbackTextError,
+                  ]}
+                >
+                  {profileFeedback.message}
+                </Text>
+              </View>
+            ) : null}
+
+            <TouchableOpacity
+              style={[
+                styles.primaryActionBtn,
+                savingProfile && styles.primaryActionBtnDisabled,
+              ]}
+              onPress={handleSaveProfile}
+              disabled={savingProfile}
+            >
+              {savingProfile ? (
+                <ActivityIndicator color="#FFF" size="small" />
+              ) : (
+                <Text style={styles.primaryActionBtnText}>Save Changes</Text>
+              )}
+            </TouchableOpacity>
           </View>
         </SectionCard>
 
@@ -506,6 +926,92 @@ function StudentProfile() {
               <Key color="#FFF" size={16} />
               <Text style={styles.changePasswordBtnText}>Change Password</Text>
             </TouchableOpacity>
+
+            <View style={styles.securityDivider} />
+
+            <View style={styles.securityInfo}>
+              <Text style={styles.securityTitle}>Password Reset Request</Text>
+              <Text style={styles.securitySubtitle}>
+                Ask an administrator to reset your account password
+              </Text>
+            </View>
+
+            {pendingPasswordReset ? (
+              <View style={styles.pendingResetCard}>
+                <Text style={styles.pendingResetStatus}>Status: Pending</Text>
+                <Text style={styles.pendingResetMeta}>
+                  {pendingPasswordReset.reason || "No reason provided"}
+                </Text>
+                <Text style={styles.pendingResetMeta}>
+                  Requested: {pendingPasswordReset.createdAtHuman || "Just now"}
+                </Text>
+
+                <TouchableOpacity
+                  style={[
+                    styles.secondaryActionBtn,
+                    cancellingResetRequest && styles.secondaryActionBtnDisabled,
+                  ]}
+                  onPress={handleCancelPasswordReset}
+                  disabled={cancellingResetRequest}
+                >
+                  {cancellingResetRequest ? (
+                    <ActivityIndicator color="#DB2777" size="small" />
+                  ) : (
+                    <Text style={styles.secondaryActionBtnText}>
+                      Cancel Request
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.resetRequestForm}>
+                <TextInput
+                  style={styles.textAreaInput}
+                  value={requestReason}
+                  onChangeText={setRequestReason}
+                  placeholder="Optional reason for your request"
+                  placeholderTextColor="#9CA3AF"
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.secondaryActionBtn,
+                    submittingResetRequest && styles.secondaryActionBtnDisabled,
+                  ]}
+                  onPress={handleRequestPasswordReset}
+                  disabled={submittingResetRequest}
+                >
+                  {submittingResetRequest ? (
+                    <ActivityIndicator color="#DB2777" size="small" />
+                  ) : (
+                    <Text style={styles.secondaryActionBtnText}>
+                      Request Password Reset
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </SectionCard>
+
+        <SectionCard
+          title="Danger Zone"
+          description="Permanent account actions"
+          icon={AlertCircle}
+        >
+          <View style={styles.dangerBox}>
+            <Text style={styles.dangerTitle}>Delete Account</Text>
+            <Text style={styles.dangerSubtitle}>
+              This permanently removes your account and profile data.
+            </Text>
+            <TouchableOpacity
+              style={styles.deleteAccountBtn}
+              onPress={() => setShowDeleteModal(true)}
+            >
+              <Text style={styles.deleteAccountBtnText}>Delete My Account</Text>
+            </TouchableOpacity>
           </View>
         </SectionCard>
 
@@ -513,9 +1019,8 @@ function StudentProfile() {
         <View style={styles.infoNote}>
           <AlertCircle color="#3B82F6" size={18} />
           <Text style={styles.infoNoteText}>
-            <Text style={styles.infoNoteStrong}>Note:</Text> To update your
-            personal information, please contact your teacher or school
-            administrator.
+            <Text style={styles.infoNoteStrong}>Note:</Text> Academic fields
+            such as LRN, grade level, and section are managed by your school.
           </Text>
         </View>
 
@@ -526,6 +1031,13 @@ function StudentProfile() {
       <ChangePasswordModal
         visible={showPasswordModal}
         onClose={() => setShowPasswordModal(false)}
+      />
+
+      <DeleteAccountModal
+        visible={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleDeleteAccount}
+        loading={deletingAccount}
       />
     </SafeAreaView>
   );
@@ -742,6 +1254,70 @@ const styles = StyleSheet.create({
   infoGrid: {
     gap: 12,
   },
+  editFormGrid: {
+    gap: 12,
+  },
+  formField: {
+    gap: 6,
+  },
+  formLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#6B7280",
+  },
+  formInput: {
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    backgroundColor: "#FFF",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    fontSize: 14,
+    color: "#111827",
+  },
+  formErrorText: {
+    color: "#DC2626",
+    fontSize: 12,
+  },
+  formFeedback: {
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+  },
+  formFeedbackSuccess: {
+    backgroundColor: "#ECFDF5",
+    borderColor: "#A7F3D0",
+  },
+  formFeedbackError: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+  },
+  formFeedbackText: {
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  formFeedbackTextSuccess: {
+    color: "#065F46",
+  },
+  formFeedbackTextError: {
+    color: "#991B1B",
+  },
+  primaryActionBtn: {
+    borderRadius: 12,
+    backgroundColor: "#DB2777",
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  primaryActionBtnDisabled: {
+    opacity: 0.6,
+  },
+  primaryActionBtnText: {
+    color: "#FFF",
+    fontSize: 14,
+    fontWeight: "700",
+  },
   infoField: {
     marginBottom: 4,
   },
@@ -810,6 +1386,92 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
   },
+  securityDivider: {
+    height: 1,
+    backgroundColor: "#E5E7EB",
+    marginVertical: 14,
+  },
+  pendingResetCard: {
+    backgroundColor: "#FDF2F8",
+    borderWidth: 1,
+    borderColor: "#FBCFE8",
+    borderRadius: 12,
+    padding: 12,
+    gap: 6,
+  },
+  pendingResetStatus: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#9D174D",
+  },
+  pendingResetMeta: {
+    fontSize: 12,
+    color: "#6B7280",
+    lineHeight: 18,
+  },
+  resetRequestForm: {
+    gap: 10,
+  },
+  textAreaInput: {
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    backgroundColor: "#FFF",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    minHeight: 88,
+    fontSize: 13,
+    color: "#111827",
+  },
+  secondaryActionBtn: {
+    borderWidth: 1,
+    borderColor: "#F9A8D4",
+    backgroundColor: "#FFF",
+    borderRadius: 12,
+    paddingVertical: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  secondaryActionBtnDisabled: {
+    opacity: 0.6,
+  },
+  secondaryActionBtnText: {
+    color: "#BE185D",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+
+  // Danger zone
+  dangerBox: {
+    backgroundColor: "#FEF2F2",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    padding: 14,
+    gap: 8,
+  },
+  dangerTitle: {
+    color: "#991B1B",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  dangerSubtitle: {
+    color: "#7F1D1D",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  deleteAccountBtn: {
+    marginTop: 6,
+    borderRadius: 12,
+    backgroundColor: "#DC2626",
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  deleteAccountBtnText: {
+    color: "#FFF",
+    fontSize: 14,
+    fontWeight: "700",
+  },
 
   // Info Note
   infoNote: {
@@ -863,6 +1525,15 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 14,
     backgroundColor: "#FCE7F3",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  modalIconBoxDestructive: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: "#FEE2E2",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
@@ -940,6 +1611,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 12,
   },
+  destructiveMessage: {
+    fontSize: 13,
+    color: "#6B7280",
+    lineHeight: 18,
+    marginBottom: 16,
+  },
   cancelBtn: {
     flex: 1,
     paddingVertical: 14,
@@ -964,6 +1641,21 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   submitBtnText: {
+    color: "#FFF",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  destructiveBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    backgroundColor: "#DC2626",
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  destructiveBtnDisabled: {
+    opacity: 0.6,
+  },
+  destructiveBtnText: {
     color: "#FFF",
     fontSize: 14,
     fontWeight: "600",

@@ -25,7 +25,7 @@ export default function NotificationItem({
             useNativeDriver: true,
           }),
         ]),
-        { iterations: 3 }
+        { iterations: 3 },
       );
       blinkAnimation.start();
       return () => blinkAnimation.stop();
@@ -45,15 +45,15 @@ export default function NotificationItem({
           backgroundColor: isHighlighted
             ? "#FCE7F3"
             : isUnread
-            ? "#FFF5F7"
-            : "#FFFFFF",
+              ? "#FFF5F7"
+              : "#FFFFFF",
           marginBottom: 10,
           borderWidth: isHighlighted ? 2 : isUnread ? 1 : 0,
           borderColor: isHighlighted
             ? "#DB2777"
             : isUnread
-            ? "#FBCFE8"
-            : "transparent",
+              ? "#FBCFE8"
+              : "transparent",
           shadowColor: "#000",
           shadowOffset: { width: 0, height: 2 },
           shadowOpacity: 0.05,
@@ -98,9 +98,23 @@ export default function NotificationItem({
               >
                 {notification.title}
               </Text>
-              <Text style={{ fontSize: 11, color: "#9CA3AF" }}>
-                {notification.createdAt}
-              </Text>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+              >
+                {isUnread && (
+                  <View
+                    style={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: 999,
+                      backgroundColor: "#EF4444",
+                    }}
+                  />
+                )}
+                <Text style={{ fontSize: 11, color: "#9CA3AF" }}>
+                  {notification.createdAt}
+                </Text>
+              </View>
             </View>
 
             <Text
@@ -114,6 +128,19 @@ export default function NotificationItem({
             >
               {notification.message}
             </Text>
+
+            {notification.type === "extension" && notification.deadlineLabel ? (
+              <Text
+                style={{
+                  marginTop: 4,
+                  fontSize: 11,
+                  fontWeight: "600",
+                  color: "#D97706",
+                }}
+              >
+                Updated deadline: {notification.deadlineLabel}
+              </Text>
+            ) : null}
 
             <View
               style={{
@@ -143,7 +170,7 @@ export default function NotificationItem({
                       fontSize: 12,
                     }}
                   >
-                    Mark read
+                    Mark as read
                   </Text>
                 </TouchableOpacity>
               )}

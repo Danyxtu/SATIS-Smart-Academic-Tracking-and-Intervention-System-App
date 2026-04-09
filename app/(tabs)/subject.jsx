@@ -19,6 +19,7 @@ import {
   Book,
   HelpCircle,
   TrendingUp,
+  TrendingDown,
   Calendar,
   Lightbulb,
   ChevronDown,
@@ -30,7 +31,7 @@ import axios from "axios";
 
 export default function SubjectRisk() {
   const router = useRouter();
-  const [selectedFilter, setSelectedFilter] = useState("All");
+  const [selectedFilter, setSelectedFilter] = useState("all");
   const [showAll, setShowAll] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState(null);
 
@@ -62,18 +63,60 @@ export default function SubjectRisk() {
     fetchData();
   }, []);
 
-  const stats = data?.stats || { highRisk: 0, mediumRisk: 0, lowRisk: 0 };
+  const stats = data?.stats || {
+    atRisk: 0,
+    needsAttention: 0,
+    recentDecline: 0,
+    onTrack: 0,
+    highRisk: 0,
+    mediumRisk: 0,
+    lowRisk: 0,
+  };
   const allSubjects = data?.subjects || [];
 
-  const getRiskColor = (risk) => {
-    if (risk === "High Risk") return "#fb7185";
-    if (risk === "Medium Risk") return "#fb923c";
+  const normalizeRiskKey = (subject) => {
+    if (subject?.riskKey) return subject.riskKey;
+
+    const label = String(
+      subject?.riskLabel || subject?.risk || "",
+    ).toLowerCase();
+    if (label.includes("at risk") || label.includes("high risk")) {
+      return "at_risk";
+    }
+    if (label.includes("needs attention") || label.includes("medium risk")) {
+      return "needs_attention";
+    }
+    if (label.includes("recent decline")) {
+      return "recent_decline";
+    }
+
+    return "on_track";
+  };
+
+  const getRiskLabel = (subject) => {
+    if (subject?.riskLabel) return subject.riskLabel;
+    if (subject?.risk) return subject.risk;
+
+    const key = normalizeRiskKey(subject);
+    if (key === "at_risk") return "At Risk";
+    if (key === "needs_attention") return "Needs Attention";
+    if (key === "recent_decline") return "Recent Decline";
+    return "On Track";
+  };
+
+  const getRiskColor = (subject) => {
+    const key = normalizeRiskKey(subject);
+    if (key === "at_risk") return "#ef4444";
+    if (key === "needs_attention") return "#f59e0b";
+    if (key === "recent_decline") return "#3b82f6";
     return "#10b981";
   };
 
-  const getRiskBgColor = (risk) => {
-    if (risk === "High Risk") return "#fff1f2";
-    if (risk === "Medium Risk") return "#fff7ed";
+  const getRiskBgColor = (subject) => {
+    const key = normalizeRiskKey(subject);
+    if (key === "at_risk") return "#fef2f2";
+    if (key === "needs_attention") return "#fff7ed";
+    if (key === "recent_decline") return "#eff6ff";
     return "#ecfdf5";
   };
 
@@ -97,8 +140,8 @@ export default function SubjectRisk() {
   };
 
   const filteredSubjects = allSubjects.filter((subject) => {
-    if (selectedFilter === "All") return true;
-    return subject.risk === selectedFilter;
+    if (selectedFilter === "all") return true;
+    return normalizeRiskKey(subject) === selectedFilter;
   });
 
   const displayedSubjects = showAll
@@ -106,8 +149,10 @@ export default function SubjectRisk() {
     : filteredSubjects.slice(0, 3);
 
   const SubjectCard = ({ subject }) => {
-    const riskColor = getRiskColor(subject.risk);
-    const riskBgColor = getRiskBgColor(subject.risk);
+    const riskColor = getRiskColor(subject);
+    const riskBgColor = getRiskBgColor(subject);
+    const riskKey = normalizeRiskKey(subject);
+    const riskLabel = getRiskLabel(subject);
 
     return (
       <TouchableOpacity
@@ -120,14 +165,17 @@ export default function SubjectRisk() {
             <View
               style={[styles.subjectIcon, { backgroundColor: riskBgColor }]}
             >
-              {subject.risk === "High Risk" && (
+              {riskKey === "at_risk" && (
                 <ShieldAlert color={riskColor} size={18} />
               )}
-              {subject.risk === "Low Risk" && (
+              {riskKey === "on_track" && (
                 <ShieldCheck color={riskColor} size={18} />
               )}
-              {subject.risk === "Medium Risk" && (
+              {riskKey === "needs_attention" && (
                 <ShieldHalf color={riskColor} size={18} />
+              )}
+              {riskKey === "recent_decline" && (
+                <TrendingDown color={riskColor} size={18} />
               )}
             </View>
             <View style={{ flex: 1 }}>
@@ -138,7 +186,7 @@ export default function SubjectRisk() {
 
           <View style={[styles.riskBadge, { backgroundColor: riskBgColor }]}>
             <Text style={[styles.riskLabel, { color: riskColor }]}>
-              {subject.risk}
+              {riskLabel}
             </Text>
           </View>
         </View>
@@ -165,8 +213,9 @@ export default function SubjectRisk() {
   const SubjectDetailModal = () => {
     if (!selectedSubject) return null;
 
-    const riskColor = getRiskColor(selectedSubject.risk);
-    const riskBgColor = getRiskBgColor(selectedSubject.risk);
+    const riskColor = getRiskColor(selectedSubject);
+    const riskBgColor = getRiskBgColor(selectedSubject);
+    const riskLabel = getRiskLabel(selectedSubject);
     const trendColor = getTrendColor(selectedSubject.trend);
     const isFailing =
       selectedSubject.grade !== null && selectedSubject.grade < 75;
@@ -204,7 +253,7 @@ export default function SubjectRisk() {
                   ]}
                 >
                   <Text style={[styles.detailRiskText, { color: riskColor }]}>
-                    {selectedSubject.risk}
+                    {riskLabel}
                   </Text>
                 </View>
 
@@ -434,22 +483,36 @@ export default function SubjectRisk() {
           <View style={styles.statsGrid}>
             <View style={[styles.statBox, { backgroundColor: "#fff1f2" }]}>
               <View
-                style={[styles.statIconBox, { backgroundColor: "#fb7185" }]}
+                style={[styles.statIconBox, { backgroundColor: "#ef4444" }]}
               >
                 <ShieldAlert size={18} color="#fff" />
               </View>
-              <Text style={styles.statNumber}>{stats.highRisk}</Text>
-              <Text style={styles.statLabel}>High Risk</Text>
+              <Text style={styles.statNumber}>
+                {stats.atRisk ?? stats.highRisk}
+              </Text>
+              <Text style={styles.statLabel}>At Risk</Text>
             </View>
 
             <View style={[styles.statBox, { backgroundColor: "#fff7ed" }]}>
               <View
-                style={[styles.statIconBox, { backgroundColor: "#fb923c" }]}
+                style={[styles.statIconBox, { backgroundColor: "#f59e0b" }]}
               >
                 <ShieldHalf size={18} color="#fff" />
               </View>
-              <Text style={styles.statNumber}>{stats.mediumRisk}</Text>
-              <Text style={styles.statLabel}>Medium Risk</Text>
+              <Text style={styles.statNumber}>
+                {stats.needsAttention ?? stats.mediumRisk}
+              </Text>
+              <Text style={styles.statLabel}>Needs Attention</Text>
+            </View>
+
+            <View style={[styles.statBox, { backgroundColor: "#eff6ff" }]}>
+              <View
+                style={[styles.statIconBox, { backgroundColor: "#3b82f6" }]}
+              >
+                <TrendingDown size={18} color="#fff" />
+              </View>
+              <Text style={styles.statNumber}>{stats.recentDecline ?? 0}</Text>
+              <Text style={styles.statLabel}>Recent Decline</Text>
             </View>
 
             <View style={[styles.statBox, { backgroundColor: "#ecfdf5" }]}>
@@ -458,8 +521,10 @@ export default function SubjectRisk() {
               >
                 <ShieldCheck size={18} color="#fff" />
               </View>
-              <Text style={styles.statNumber}>{stats.lowRisk}</Text>
-              <Text style={styles.statLabel}>Low Risk</Text>
+              <Text style={styles.statNumber}>
+                {stats.onTrack ?? stats.lowRisk}
+              </Text>
+              <Text style={styles.statLabel}>On Track</Text>
             </View>
           </View>
         </View>
@@ -478,15 +543,15 @@ export default function SubjectRisk() {
           {/* Filters */}
           <View style={styles.filterRow}>
             <TouchableOpacity
-              onPress={() => setSelectedFilter("All")}
+              onPress={() => setSelectedFilter("all")}
               style={[
                 styles.filterButton,
-                selectedFilter === "All" && styles.filterButtonActive,
+                selectedFilter === "all" && styles.filterButtonActive,
               ]}
             >
               <Text
                 style={
-                  selectedFilter === "All"
+                  selectedFilter === "all"
                     ? styles.filterTextActive
                     : styles.filterText
                 }
@@ -496,56 +561,76 @@ export default function SubjectRisk() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => setSelectedFilter("High Risk")}
+              onPress={() => setSelectedFilter("at_risk")}
               style={[
                 styles.filterButton,
-                selectedFilter === "High Risk" && styles.filterButtonActive,
+                selectedFilter === "at_risk" && styles.filterButtonActive,
               ]}
             >
               <Text
                 style={
-                  selectedFilter === "High Risk"
+                  selectedFilter === "at_risk"
                     ? styles.filterTextActive
                     : styles.filterText
                 }
               >
-                High ({stats.highRisk})
+                At Risk ({stats.atRisk ?? stats.highRisk})
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => setSelectedFilter("Medium Risk")}
+              onPress={() => setSelectedFilter("needs_attention")}
               style={[
                 styles.filterButton,
-                selectedFilter === "Medium Risk" && styles.filterButtonActive,
+                selectedFilter === "needs_attention" &&
+                  styles.filterButtonActive,
               ]}
             >
               <Text
                 style={
-                  selectedFilter === "Medium Risk"
+                  selectedFilter === "needs_attention"
                     ? styles.filterTextActive
                     : styles.filterText
                 }
               >
-                Medium ({stats.mediumRisk})
+                Needs Attention ({stats.needsAttention ?? stats.mediumRisk})
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => setSelectedFilter("Low Risk")}
+              onPress={() => setSelectedFilter("recent_decline")}
               style={[
                 styles.filterButton,
-                selectedFilter === "Low Risk" && styles.filterButtonActive,
+                selectedFilter === "recent_decline" &&
+                  styles.filterButtonActive,
               ]}
             >
               <Text
                 style={
-                  selectedFilter === "Low Risk"
+                  selectedFilter === "recent_decline"
                     ? styles.filterTextActive
                     : styles.filterText
                 }
               >
-                Low ({stats.lowRisk})
+                Recent Decline ({stats.recentDecline ?? 0})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setSelectedFilter("on_track")}
+              style={[
+                styles.filterButton,
+                selectedFilter === "on_track" && styles.filterButtonActive,
+              ]}
+            >
+              <Text
+                style={
+                  selectedFilter === "on_track"
+                    ? styles.filterTextActive
+                    : styles.filterText
+                }
+              >
+                On Track ({stats.onTrack ?? stats.lowRisk})
               </Text>
             </TouchableOpacity>
           </View>
@@ -559,9 +644,9 @@ export default function SubjectRisk() {
             <View style={styles.emptyState}>
               <ShieldCheck color="#10b981" size={48} />
               <Text style={styles.emptyStateText}>
-                {selectedFilter === "All"
+                {selectedFilter === "all"
                   ? "No subjects enrolled yet."
-                  : `No ${selectedFilter.toLowerCase()} subjects.`}
+                  : "No subjects match this filter."}
               </Text>
             </View>
           )}
@@ -664,8 +749,13 @@ const styles = StyleSheet.create({
   },
   statsHeader: { marginBottom: 12 },
   statsTitle: { fontSize: 16, fontWeight: "700" },
-  statsGrid: { flexDirection: "row", gap: 10 },
-  statBox: { flex: 1, borderRadius: 16, padding: 12, alignItems: "center" },
+  statsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  statBox: {
+    width: "48%",
+    borderRadius: 16,
+    padding: 12,
+    alignItems: "center",
+  },
   statIconBox: {
     width: 40,
     height: 40,

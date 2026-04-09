@@ -82,6 +82,49 @@ const detectChartCategory = (item) => {
   return "other";
 };
 
+const normalizeQuarterNumber = (quarterValue) => {
+  if (quarterValue === null || quarterValue === undefined) return null;
+  const parsed = Number(String(quarterValue).replace(/[^0-9]/g, ""));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const getQuarterMetadata = (quarterValue) => {
+  const quarterNum = normalizeQuarterNumber(quarterValue);
+  if (!quarterNum) {
+    return {
+      quarterNum: null,
+      shortLabel: "",
+      title: "",
+      fullLabel: "",
+    };
+  }
+
+  if (quarterNum === 1) {
+    return {
+      quarterNum,
+      shortLabel: "Q1",
+      title: "Midterm Quarter",
+      fullLabel: "Midterm Quarter (Q1)",
+    };
+  }
+
+  if (quarterNum === 2) {
+    return {
+      quarterNum,
+      shortLabel: "Q2",
+      title: "Final Quarter",
+      fullLabel: "Final Quarter (Q2)",
+    };
+  }
+
+  return {
+    quarterNum,
+    shortLabel: `Q${quarterNum}`,
+    title: `Quarter ${quarterNum}`,
+    fullLabel: `Quarter ${quarterNum}`,
+  };
+};
+
 /**
  * GradeChartCard - Line chart plotting grade scores by category
  * Mirrors the web app's GradeChart component
@@ -346,6 +389,7 @@ export default function SubjectAnalytics() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState("grades");
+  const [selectedQuarter, setSelectedQuarter] = useState(null);
   const [showApproachModal, setShowApproachModal] = useState(false);
   const [exporting, setExporting] = useState(false);
 
@@ -380,6 +424,58 @@ export default function SubjectAnalytics() {
       if (grade >= 70) return "At Risk";
       return "Critical";
     };
+
+    const normalizeRiskKey = (value) => {
+      if (!value) return null;
+      return String(value)
+        .toLowerCase()
+        .trim()
+        .replace(/[\s-]+/g, "_");
+    };
+
+    const getRiskLabelFromKey = (riskKey) => {
+      return (
+        {
+          on_track: "On Track",
+          needs_attention: "Needs Attention",
+          recent_decline: "Recent Decline",
+          at_risk: "At Risk",
+          critical: "Critical",
+        }[riskKey] || null
+      );
+    };
+
+    const getRiskClassFromKey = (riskKey) => {
+      return (
+        {
+          on_track: "risk-on-track",
+          needs_attention: "risk-needs-attention",
+          recent_decline: "risk-recent-decline",
+          at_risk: "risk-at-risk",
+          critical: "risk-critical",
+        }[riskKey] || "risk-critical"
+      );
+    };
+
+    const fallbackRiskKey = normalizeRiskKey(
+      getRiskLabel(performance?.overallGrade),
+    );
+    const backendRiskKey = normalizeRiskKey(
+      data?.risk?.key || data?.risk?.category || performance?.riskCategory,
+    );
+    const backendRiskLabel =
+      data?.risk?.label || performance?.riskLabel || null;
+
+    const resolvedRiskKey =
+      backendRiskKey ||
+      normalizeRiskKey(backendRiskLabel) ||
+      fallbackRiskKey ||
+      "on_track";
+    const resolvedRiskLabel =
+      backendRiskLabel ||
+      getRiskLabelFromKey(resolvedRiskKey) ||
+      getRiskLabel(performance?.overallGrade);
+    const resolvedRiskClass = getRiskClassFromKey(resolvedRiskKey);
 
     // Build grade breakdown table rows
     const allGrades = [
@@ -421,12 +517,14 @@ export default function SubjectAnalytics() {
 
     // Build quarterly grades
     const quarterRows = quarterlyGrades
-      .map(
-        (q) => `
+      .map((q) => {
+        const quarterMeta = getQuarterMetadata(q.quarter);
+        const quarterTitle =
+          quarterMeta.title || quarterMeta.fullLabel || "Quarter";
+
+        return `
       <div style="flex: 1; text-align: center; padding: 10px; background: #f9fafb; border-radius: 8px; margin: 0 5px;">
-        <div style="font-size: 10px; color: #6B7280; margin-bottom: 5px;">QUARTER ${
-          q.quarter
-        }</div>
+        <div style="font-size: 10px; color: #6B7280; margin-bottom: 5px;">${quarterTitle.toUpperCase()}</div>
         <div style="font-size: 24px; font-weight: 700; color: ${getGradeColorHex(
           q.grade,
         )};">
@@ -436,8 +534,8 @@ export default function SubjectAnalytics() {
           ${q.assignmentCount || 0} assignments
         </div>
       </div>
-    `,
-      )
+    `;
+      })
       .join("");
 
     return `
@@ -555,6 +653,7 @@ export default function SubjectAnalytics() {
           }
           .risk-on-track { background: #d1fae5; color: #065f46; }
           .risk-needs-attention { background: #fef3c7; color: #92400e; }
+          .risk-recent-decline { background: #dbeafe; color: #1d4ed8; }
           .risk-at-risk { background: #fee2e2; color: #991b1b; }
           .risk-critical { background: #fecaca; color: #7f1d1d; }
           
@@ -605,16 +704,7 @@ export default function SubjectAnalytics() {
               <div class="stat-label">Total Grades</div>
             </div>
             <div class="stat-card">
-              <span class="risk-badge ${
-                getRiskLabel(performance?.overallGrade) === "On Track"
-                  ? "risk-on-track"
-                  : getRiskLabel(performance?.overallGrade) ===
-                      "Needs Attention"
-                    ? "risk-needs-attention"
-                    : getRiskLabel(performance?.overallGrade) === "At Risk"
-                      ? "risk-at-risk"
-                      : "risk-critical"
-              }">${getRiskLabel(performance?.overallGrade)}</span>
+              <span class="risk-badge ${resolvedRiskClass}">${resolvedRiskLabel}</span>
               <div class="stat-label" style="margin-top: 5px;">Status</div>
             </div>
           </div>
@@ -757,6 +847,7 @@ export default function SubjectAnalytics() {
 
     const { performance, attendance, gradeTrend } = data;
     const gradeBreakdown = performance?.gradeBreakdown || {};
+    const quarterlyGrades = performance?.quarterlyGrades || [];
 
     // =============================================
     // STEP 1: GATHER RAW METRICS FROM API DATA
@@ -972,6 +1063,44 @@ export default function SubjectAnalytics() {
       riskColor = "#F59E0B";
     }
 
+    // Prefer the shared backend/global-rule risk classification used by teachers.
+    const backendRiskKey = data?.risk?.key || null;
+    const backendRiskLabel = data?.risk?.label || null;
+    const backendRiskReasons = Array.isArray(data?.risk?.reasons)
+      ? data.risk.reasons
+      : [];
+
+    if (backendRiskKey) {
+      if (backendRiskKey === "at_risk") {
+        riskLevel = backendRiskLabel || "At Risk";
+        riskColor = "#EF4444";
+      } else if (backendRiskKey === "needs_attention") {
+        riskLevel = backendRiskLabel || "Needs Attention";
+        riskColor = "#F59E0B";
+      } else if (backendRiskKey === "recent_decline") {
+        riskLevel = backendRiskLabel || "Recent Decline";
+        riskColor = "#3B82F6";
+      } else {
+        riskLevel = backendRiskLabel || "On Track";
+        riskColor = "#10B981";
+      }
+
+      if (backendRiskReasons.length > 0) {
+        const severity =
+          backendRiskKey === "at_risk"
+            ? "high"
+            : backendRiskKey === "needs_attention"
+              ? "medium"
+              : "low";
+
+        riskFactors.splice(
+          0,
+          riskFactors.length,
+          ...backendRiskReasons.map((text) => ({ text, severity })),
+        );
+      }
+    }
+
     // =============================================
     // STEP 5: EXPECTED GRADE CALCULATION
     // =============================================
@@ -1022,16 +1151,12 @@ export default function SubjectAnalytics() {
 
     // Attendance Adjustment
     let attendanceAdj = 0;
-    let attendanceReason = "";
     if (attendanceRate >= 90) {
       attendanceAdj = 1;
-      attendanceReason = `${attendanceRate}% attendance (≥90% bonus)`;
     } else if (attendanceRate >= 80) {
       attendanceAdj = 0;
-      attendanceReason = `${attendanceRate}% attendance (neutral range)`;
     } else {
       attendanceAdj = -Math.round((90 - attendanceRate) * 0.3);
-      attendanceReason = `${attendanceRate}% attendance (below 80% penalty)`;
     }
     expectedGrade += attendanceAdj;
     gradeExplanation.push({
@@ -1046,18 +1171,13 @@ export default function SubjectAnalytics() {
 
     // Trend Adjustment
     let trendAdj = 0;
-    let trendReason = "";
     if (trendDirection === "improving" && trendChange > 0) {
       trendAdj = Math.min(3, Math.round(trendChange * 0.4));
-      trendReason = `Improving +${Math.round(trendChange)}% (momentum)`;
     } else if (
       trendDirection === "declining" ||
       trendDirection === "slightly declining"
     ) {
       trendAdj = Math.max(-3, Math.round(trendChange * 0.3));
-      trendReason = `Declining ${Math.round(trendChange)}% (projected)`;
-    } else {
-      trendReason = "Stable performance";
     }
     expectedGrade += trendAdj;
     gradeExplanation.push({
@@ -1124,8 +1244,40 @@ export default function SubjectAnalytics() {
       expectedGrade += improvementAdj;
     }
 
-    // Clamp and round
-    expectedGrade = Math.max(60, Math.min(100, Math.round(expectedGrade)));
+    const latestExpectedQuarter = [...quarterlyGrades]
+      .filter(
+        (q) => q?.expectedGrade !== null && q?.expectedGrade !== undefined,
+      )
+      .sort(
+        (a, b) =>
+          (normalizeQuarterNumber(a?.quarterNum ?? a?.quarter) ?? 0) -
+          (normalizeQuarterNumber(b?.quarterNum ?? b?.quarter) ?? 0),
+      )
+      .at(-1);
+
+    const backendExpectedGradeRaw = latestExpectedQuarter?.expectedGrade;
+
+    if (
+      backendExpectedGradeRaw !== null &&
+      backendExpectedGradeRaw !== undefined
+    ) {
+      expectedGrade = Math.round(Number(backendExpectedGradeRaw));
+      gradeExplanation.splice(0, gradeExplanation.length, {
+        label: "Teacher Projection (Global Rule)",
+        value: expectedGrade,
+        impact: 0,
+        formula: "Computed from the same backend rule set used by teachers.",
+      });
+    } else {
+      expectedGrade = null;
+      gradeExplanation.splice(0, gradeExplanation.length, {
+        label: "Expected Grade",
+        value: "Pending",
+        impact: 0,
+        formula:
+          "Expected grade appears after enough graded activities are recorded.",
+      });
+    }
 
     // =============================================
     // STEP 6: GAP ANALYSIS
@@ -1135,7 +1287,8 @@ export default function SubjectAnalytics() {
     const gapTo75 = currentGrade > 0 ? Math.max(0, 75 - currentGrade) : null;
 
     // Gap from expected to target (85)
-    const expectedTo85Gap = Math.max(0, 85 - expectedGrade);
+    const expectedTo85Gap =
+      expectedGrade !== null ? Math.max(0, 85 - expectedGrade) : null;
 
     return {
       // Raw metrics
@@ -1215,6 +1368,10 @@ export default function SubjectAnalytics() {
       absentDays,
       totalDays,
     } = personalizedInsights;
+
+    if (expectedGrade === null || expectedGrade === undefined) {
+      return null;
+    }
 
     const targetGrade = 85; // Very Satisfactory
     const gapToTarget = Math.max(0, targetGrade - expectedGrade);
@@ -1543,6 +1700,108 @@ export default function SubjectAnalytics() {
     return "#EF4444";
   };
 
+  const { subject, performance, attendance, gradeTrend } = data || {};
+  const quarterlyGrades = performance?.quarterlyGrades || [];
+  const gradeBreakdown = performance?.gradeBreakdown || {};
+
+  const displayQuarterlyGrades = useMemo(() => {
+    const quarterMap = new Map();
+
+    quarterlyGrades.forEach((quarterItem) => {
+      const quarterNum = normalizeQuarterNumber(quarterItem?.quarter);
+      if (!quarterNum) return;
+      const quarterMeta = getQuarterMetadata(quarterNum);
+
+      quarterMap.set(quarterNum, {
+        ...quarterItem,
+        quarter: quarterNum,
+        label: quarterMeta.fullLabel,
+        shortLabel: quarterMeta.shortLabel,
+        title: quarterMeta.title,
+      });
+    });
+
+    return [1, 2].map((quarterNum) => {
+      const quarterMeta = getQuarterMetadata(quarterNum);
+      const existingQuarter = quarterMap.get(quarterNum);
+      if (existingQuarter) {
+        return {
+          ...existingQuarter,
+          label: quarterMeta.fullLabel,
+          shortLabel: existingQuarter.shortLabel || quarterMeta.shortLabel,
+          title: existingQuarter.title || quarterMeta.title,
+        };
+      }
+
+      return {
+        quarter: quarterNum,
+        label: quarterMeta.fullLabel,
+        shortLabel: quarterMeta.shortLabel,
+        title: quarterMeta.title,
+        grade: null,
+        expectedGrade: null,
+        attendance: null,
+        itemCount: 0,
+        remarks: "Not Started",
+      };
+    });
+  }, [quarterlyGrades]);
+
+  const filteredGradeBreakdown = useMemo(() => {
+    const filterQuarterItems = (items = []) => {
+      if (selectedQuarter === null) return items;
+
+      return items.filter(
+        (item) => normalizeQuarterNumber(item?.quarter) === selectedQuarter,
+      );
+    };
+
+    const writtenWorksItems = filterQuarterItems(
+      gradeBreakdown?.writtenWorks?.items || [],
+    );
+    const performanceTaskItems = filterQuarterItems(
+      gradeBreakdown?.performanceTask?.items || [],
+    );
+    const quarterlyExamItems = filterQuarterItems(
+      gradeBreakdown?.quarterlyExam?.items || [],
+    );
+
+    return {
+      ...gradeBreakdown,
+      writtenWorks: {
+        ...(gradeBreakdown?.writtenWorks || {}),
+        items: writtenWorksItems,
+        count: writtenWorksItems.length,
+      },
+      performanceTask: {
+        ...(gradeBreakdown?.performanceTask || {}),
+        items: performanceTaskItems,
+        count: performanceTaskItems.length,
+      },
+      quarterlyExam: {
+        ...(gradeBreakdown?.quarterlyExam || {}),
+        items: quarterlyExamItems,
+        count: quarterlyExamItems.length,
+      },
+    };
+  }, [gradeBreakdown, selectedQuarter]);
+
+  const selectedQuarterSummary = useMemo(() => {
+    if (selectedQuarter === null) return null;
+
+    return (
+      displayQuarterlyGrades.find(
+        (quarterItem) =>
+          normalizeQuarterNumber(quarterItem?.quarter) === selectedQuarter,
+      ) || null
+    );
+  }, [displayQuarterlyGrades, selectedQuarter]);
+
+  const selectedQuarterLabel =
+    selectedQuarter !== null
+      ? getQuarterMetadata(selectedQuarter).fullLabel
+      : null;
+
   if (loading) {
     return (
       <SafeAreaView style={styles.safe}>
@@ -1566,9 +1825,10 @@ export default function SubjectAnalytics() {
     );
   }
 
-  const { subject, performance, attendance, gradeTrend } = data || {};
-  const quarterlyGrades = performance?.quarterlyGrades || [];
-  const gradeBreakdown = performance?.gradeBreakdown || {};
+  const writtenWorksItems = filteredGradeBreakdown.writtenWorks?.items || [];
+  const performanceTaskItems =
+    filteredGradeBreakdown.performanceTask?.items || [];
+  const quarterlyExamItems = filteredGradeBreakdown.quarterlyExam?.items || [];
 
   // Prefer API subject name, fall back to route param to avoid "Unknown Subject"
   const displaySubjectName =
@@ -1650,24 +1910,48 @@ export default function SubjectAnalytics() {
           {/* Left: Quarterly Grades */}
           <View style={styles.leftColumn}>
             <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <Calendar color="#DB2777" size={20} />
-                <Text style={styles.cardTitle}>Quarterly Grades</Text>
+              <View style={styles.quarterSectionHeader}>
+                <View style={styles.quarterSectionTitleWrap}>
+                  <Calendar color="#DB2777" size={20} />
+                  <Text style={styles.cardTitle}>Quarterly Grades</Text>
+                </View>
+                {selectedQuarter !== null && (
+                  <TouchableOpacity
+                    style={styles.selectedQuarterBadge}
+                    onPress={() => setSelectedQuarter(null)}
+                  >
+                    <Text style={styles.selectedQuarterBadgeText}>
+                      Showing {selectedQuarterLabel} • Clear
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
               <View style={styles.quarterGrid}>
-                {quarterlyGrades.slice(0, 2).map((q, idx) => {
-                  const isQ2NotStarted =
-                    q.quarter === 2 && q.grade === null && q.itemCount === 0;
+                {displayQuarterlyGrades.map((q) => {
+                  const quarterNum = normalizeQuarterNumber(q.quarter) || 0;
+                  const quarterMeta = getQuarterMetadata(quarterNum);
+                  const quarterBadgeLabel =
+                    q.shortLabel || quarterMeta.shortLabel;
+                  const quarterDisplayLabel = q.label || quarterMeta.fullLabel;
+                  const isQuarterNotStarted =
+                    q.grade === null && (q.itemCount || 0) === 0;
+                  const isQuarterSelected = selectedQuarter === quarterNum;
+                  const handleQuarterPress = () => {
+                    setSelectedQuarter((currentQuarter) =>
+                      currentQuarter === quarterNum ? null : quarterNum,
+                    );
+                  };
 
-                  if (isQ2NotStarted) {
-                    // Q2 Not Started - Simplified placeholder card
+                  if (isQuarterNotStarted) {
                     return (
-                      <View
-                        key={idx}
+                      <TouchableOpacity
+                        key={quarterNum}
                         style={[
                           styles.quarterCard,
                           styles.quarterCardNotStarted,
+                          isQuarterSelected && styles.quarterCardSelected,
                         ]}
+                        onPress={handleQuarterPress}
                       >
                         <View style={styles.quarterHeaderRow}>
                           <View
@@ -1682,11 +1966,13 @@ export default function SubjectAnalytics() {
                                 { color: "#9CA3AF" },
                               ]}
                             >
-                              Q{q.quarter}
+                              {quarterBadgeLabel}
                             </Text>
                           </View>
                           <View>
-                            <Text style={styles.quarterLabel}>{q.label}</Text>
+                            <Text style={styles.quarterLabel}>
+                              {quarterDisplayLabel}
+                            </Text>
                             <Text
                               style={[
                                 styles.quarterRemarks,
@@ -1701,24 +1987,26 @@ export default function SubjectAnalytics() {
                         <View style={styles.notStartedContent}>
                           <Clock color="#9CA3AF" size={32} />
                           <Text style={styles.notStartedText}>
-                            Quarter 2 has not started yet
+                            {quarterDisplayLabel} has not started yet
                           </Text>
                           <Text style={styles.notStartedSubtext}>
-                            Grades and predictions will appear once Q2 begins
+                            Grades and predictions will appear once this quarter
+                            begins
                           </Text>
                         </View>
-                      </View>
+                      </TouchableOpacity>
                     );
                   }
 
-                  // Normal quarter card (Q1 or Q2 with data)
                   return (
-                    <View
-                      key={idx}
+                    <TouchableOpacity
+                      key={quarterNum}
                       style={[
                         styles.quarterCard,
                         q.grade !== null && styles.quarterCardActive,
+                        isQuarterSelected && styles.quarterCardSelected,
                       ]}
+                      onPress={handleQuarterPress}
                     >
                       <View style={styles.quarterHeaderRow}>
                         <View
@@ -1736,11 +2024,13 @@ export default function SubjectAnalytics() {
                               { color: q.grade !== null ? "#FFF" : "#9CA3AF" },
                             ]}
                           >
-                            Q{q.quarter}
+                            {quarterBadgeLabel}
                           </Text>
                         </View>
                         <View>
-                          <Text style={styles.quarterLabel}>{q.label}</Text>
+                          <Text style={styles.quarterLabel}>
+                            {quarterDisplayLabel}
+                          </Text>
                           <Text
                             style={[
                               styles.quarterRemarks,
@@ -1770,14 +2060,16 @@ export default function SubjectAnalytics() {
                           Expected
                         </Text>
                         <Text style={styles.quarterExpectedValue}>
-                          {q.expectedGrade}
+                          {q.expectedGrade ?? "--"}
                         </Text>
                       </View>
 
                       <View style={styles.quarterFooter}>
                         <View style={styles.quarterFooterItem}>
                           <Text style={styles.quarterFooterValue}>
-                            {q.attendance ?? "--"}%
+                            {q.attendance !== null && q.attendance !== undefined
+                              ? `${q.attendance}%`
+                              : "--"}
                           </Text>
                           <Text style={styles.quarterFooterLabel}>
                             Attendance
@@ -1785,15 +2077,94 @@ export default function SubjectAnalytics() {
                         </View>
                         <View style={styles.quarterFooterItem}>
                           <Text style={styles.quarterFooterValue}>
-                            {q.itemCount}
+                            {q.itemCount ?? 0}
                           </Text>
                           <Text style={styles.quarterFooterLabel}>Items</Text>
                         </View>
                       </View>
-                    </View>
+                    </TouchableOpacity>
                   );
                 })}
               </View>
+
+              {selectedQuarterSummary && (
+                <View style={styles.selectedQuarterSummary}>
+                  <View style={styles.selectedQuarterSummaryHeader}>
+                    <Text style={styles.selectedQuarterSummaryTitle}>
+                      {selectedQuarterLabel} Summary
+                    </Text>
+                    <Text
+                      style={[
+                        styles.selectedQuarterSummaryRemarks,
+                        {
+                          color: getRemarksColor(
+                            selectedQuarterSummary?.remarks || "N/A",
+                          ),
+                        },
+                      ]}
+                    >
+                      {selectedQuarterSummary?.remarks || "N/A"}
+                    </Text>
+                  </View>
+
+                  <View style={styles.selectedQuarterSummaryGrid}>
+                    <View style={styles.selectedQuarterSummaryItem}>
+                      <Text style={styles.selectedQuarterSummaryLabel}>
+                        Current Grade
+                      </Text>
+                      <Text
+                        style={[
+                          styles.selectedQuarterSummaryValue,
+                          {
+                            color: getGradeColor(selectedQuarterSummary?.grade),
+                          },
+                        ]}
+                      >
+                        {selectedQuarterSummary?.grade ?? "--"}
+                      </Text>
+                    </View>
+
+                    <View style={styles.selectedQuarterSummaryItem}>
+                      <Text style={styles.selectedQuarterSummaryLabel}>
+                        Expected Grade
+                      </Text>
+                      <Text
+                        style={[
+                          styles.selectedQuarterSummaryValue,
+                          {
+                            color: getGradeColor(
+                              selectedQuarterSummary?.expectedGrade,
+                            ),
+                          },
+                        ]}
+                      >
+                        {selectedQuarterSummary?.expectedGrade ?? "--"}
+                      </Text>
+                    </View>
+
+                    <View style={styles.selectedQuarterSummaryItem}>
+                      <Text style={styles.selectedQuarterSummaryLabel}>
+                        Attendance
+                      </Text>
+                      <Text style={styles.selectedQuarterSummaryValue}>
+                        {selectedQuarterSummary?.attendance !== null &&
+                        selectedQuarterSummary?.attendance !== undefined
+                          ? `${selectedQuarterSummary.attendance}%`
+                          : "--"}
+                      </Text>
+                    </View>
+
+                    <View style={styles.selectedQuarterSummaryItem}>
+                      <Text style={styles.selectedQuarterSummaryLabel}>
+                        Graded Items
+                      </Text>
+                      <Text style={styles.selectedQuarterSummaryValue}>
+                        {selectedQuarterSummary?.itemCount ?? 0}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              )}
             </View>
 
             {/* Expected Grade Explanation Card */}
@@ -1856,8 +2227,8 @@ export default function SubjectAnalytics() {
                   <View style={styles.factorContent}>
                     <Text style={styles.factorTitle}>Previous Quarter</Text>
                     <Text style={styles.factorText}>
-                      Q1 performance helps predict Q2 expectations based on
-                      historical patterns
+                      Midterm quarter performance helps predict final quarter
+                      expectations based on historical patterns
                     </Text>
                   </View>
                 </View>
@@ -1912,10 +2283,14 @@ export default function SubjectAnalytics() {
                         },
                       ]}
                     >
-                      {personalizedInsights.expectedGrade}%
+                      {personalizedInsights.expectedGrade !== null
+                        ? `${personalizedInsights.expectedGrade}%`
+                        : "--"}
                     </Text>
                     <Text style={styles.gradeSummaryRemarks}>
-                      Computed Projection
+                      {personalizedInsights.expectedGrade !== null
+                        ? "Teacher Projection"
+                        : "Awaiting projection"}
                     </Text>
                   </View>
                 </View>
@@ -1923,12 +2298,14 @@ export default function SubjectAnalytics() {
                 {/* Why Expected Grade Section */}
                 <View style={styles.whyExpectedSection}>
                   <Text style={styles.whyExpectedTitle}>
-                    📊 Why is your expected grade{" "}
-                    {personalizedInsights.expectedGrade}%?
+                    {personalizedInsights.expectedGrade !== null
+                      ? `📊 Why is your expected grade ${personalizedInsights.expectedGrade}%?`
+                      : "📊 Why is expected grade pending?"}
                   </Text>
                   <Text style={styles.whyExpectedSubtitle}>
-                    Your expected grade is calculated using multiple performance
-                    factors:
+                    {personalizedInsights.expectedGrade !== null
+                      ? "Your expected grade is calculated using the same backend global rule set used by teachers:"
+                      : "Expected grade appears after enough graded activities are recorded."}
                   </Text>
 
                   {/* Formula Breakdown */}
@@ -1973,7 +2350,9 @@ export default function SubjectAnalytics() {
                           },
                         ]}
                       >
-                        {personalizedInsights.expectedGrade}%
+                        {personalizedInsights.expectedGrade !== null
+                          ? `${personalizedInsights.expectedGrade}%`
+                          : "--"}
                       </Text>
                     </View>
                   </View>
@@ -2176,21 +2555,35 @@ export default function SubjectAnalytics() {
                 )}
 
                 {/* System-Generated Approach Button */}
-                <TouchableOpacity
-                  style={styles.approachButton}
-                  onPress={() => setShowApproachModal(true)}
-                >
-                  <Lightbulb color="#FFF" size={18} />
-                  <Text style={styles.approachButtonText}>
-                    System-Generated Approach
-                  </Text>
-                  <ChevronRight color="#FFF" size={18} />
-                </TouchableOpacity>
+                {improvementPlan ? (
+                  <>
+                    <TouchableOpacity
+                      style={styles.approachButton}
+                      onPress={() => setShowApproachModal(true)}
+                    >
+                      <Lightbulb color="#FFF" size={18} />
+                      <Text style={styles.approachButtonText}>
+                        System-Generated Approach
+                      </Text>
+                      <ChevronRight color="#FFF" size={18} />
+                    </TouchableOpacity>
 
-                <Text style={styles.approachHint}>
-                  Tap to see how to improve from{" "}
-                  {personalizedInsights.expectedGrade}% → 85%
-                </Text>
+                    <Text style={styles.approachHint}>
+                      Tap to see how to improve from{" "}
+                      {personalizedInsights.expectedGrade}% → 85%
+                    </Text>
+                  </>
+                ) : (
+                  <View style={styles.pendingExpectedCard}>
+                    <Text style={styles.pendingExpectedTitle}>
+                      Expected grade is not available yet.
+                    </Text>
+                    <Text style={styles.pendingExpectedText}>
+                      This appears after graded activities are recorded using
+                      the teacher's global rule settings.
+                    </Text>
+                  </View>
+                )}
               </View>
             )}
           </View>
@@ -2288,7 +2681,7 @@ export default function SubjectAnalytics() {
         </View>
 
         {/* Grade Trend Line Chart */}
-        <GradeChartCard gradeBreakdown={gradeBreakdown} />
+        <GradeChartCard gradeBreakdown={filteredGradeBreakdown} />
 
         {/* Grade Breakdown */}
         <View style={styles.card}>
@@ -2303,17 +2696,17 @@ export default function SubjectAnalytics() {
               {
                 key: "grades",
                 label: "Written Works",
-                count: gradeBreakdown.writtenWorks?.count || 0,
+                count: writtenWorksItems.length,
               },
               {
                 key: "performance",
                 label: "Performance Task",
-                count: gradeBreakdown.performanceTask?.count || 0,
+                count: performanceTaskItems.length,
               },
               {
                 key: "exam",
                 label: "Quarterly Exam",
-                count: gradeBreakdown.quarterlyExam?.count || 0,
+                count: quarterlyExamItems.length,
               },
             ].map((tab) => (
               <TouchableOpacity
@@ -2344,13 +2737,14 @@ export default function SubjectAnalytics() {
           {/* Tab Content */}
           <View style={styles.gradeList}>
             {activeTab === "grades" &&
-              (gradeBreakdown.writtenWorks?.items || []).length > 0 &&
-              gradeBreakdown.writtenWorks.items.map((item) => (
+              writtenWorksItems.length > 0 &&
+              writtenWorksItems.map((item) => (
                 <View key={item.id} style={styles.gradeItem}>
                   <View style={styles.gradeItemLeft}>
                     <Text style={styles.gradeItemName}>{item.name}</Text>
                     <Text style={styles.gradeItemDate}>
-                      {item.date} • Q{item.quarter}
+                      {item.date} •{" "}
+                      {getQuarterMetadata(item.quarter).shortLabel}
                     </Text>
                   </View>
                   <View style={styles.gradeItemRight}>
@@ -2370,13 +2764,14 @@ export default function SubjectAnalytics() {
               ))}
 
             {activeTab === "performance" &&
-              (gradeBreakdown.performanceTask?.items || []).length > 0 &&
-              gradeBreakdown.performanceTask.items.map((item) => (
+              performanceTaskItems.length > 0 &&
+              performanceTaskItems.map((item) => (
                 <View key={item.id} style={styles.gradeItem}>
                   <View style={styles.gradeItemLeft}>
                     <Text style={styles.gradeItemName}>{item.name}</Text>
                     <Text style={styles.gradeItemDate}>
-                      {item.date} • Q{item.quarter}
+                      {item.date} •{" "}
+                      {getQuarterMetadata(item.quarter).shortLabel}
                     </Text>
                   </View>
                   <View style={styles.gradeItemRight}>
@@ -2396,13 +2791,14 @@ export default function SubjectAnalytics() {
               ))}
 
             {activeTab === "exam" &&
-              (gradeBreakdown.quarterlyExam?.items || []).length > 0 &&
-              gradeBreakdown.quarterlyExam.items.map((item) => (
+              quarterlyExamItems.length > 0 &&
+              quarterlyExamItems.map((item) => (
                 <View key={item.id} style={styles.gradeItem}>
                   <View style={styles.gradeItemLeft}>
                     <Text style={styles.gradeItemName}>{item.name}</Text>
                     <Text style={styles.gradeItemDate}>
-                      {item.date} • Q{item.quarter}
+                      {item.date} •{" "}
+                      {getQuarterMetadata(item.quarter).shortLabel}
                     </Text>
                   </View>
                   <View style={styles.gradeItemRight}>
@@ -2422,33 +2818,37 @@ export default function SubjectAnalytics() {
               ))}
 
             {/* Empty states */}
-            {activeTab === "grades" &&
-              (gradeBreakdown.writtenWorks?.items || []).length === 0 && (
-                <View style={styles.emptyState}>
-                  <FileText color="#9CA3AF" size={32} />
-                  <Text style={styles.emptyStateText}>
-                    No written works yet.
-                  </Text>
-                </View>
-              )}
+            {activeTab === "grades" && writtenWorksItems.length === 0 && (
+              <View style={styles.emptyState}>
+                <FileText color="#9CA3AF" size={32} />
+                <Text style={styles.emptyStateText}>
+                  {selectedQuarter !== null
+                    ? `No written works recorded for ${selectedQuarterLabel}.`
+                    : "No written works yet."}
+                </Text>
+              </View>
+            )}
             {activeTab === "performance" &&
-              (gradeBreakdown.performanceTask?.items || []).length === 0 && (
+              performanceTaskItems.length === 0 && (
                 <View style={styles.emptyState}>
                   <Award color="#9CA3AF" size={32} />
                   <Text style={styles.emptyStateText}>
-                    No performance tasks yet.
+                    {selectedQuarter !== null
+                      ? `No performance tasks recorded for ${selectedQuarterLabel}.`
+                      : "No performance tasks yet."}
                   </Text>
                 </View>
               )}
-            {activeTab === "exam" &&
-              (gradeBreakdown.quarterlyExam?.items || []).length === 0 && (
-                <View style={styles.emptyState}>
-                  <AlertCircle color="#9CA3AF" size={32} />
-                  <Text style={styles.emptyStateText}>
-                    Quarterly exam has not been started yet.
-                  </Text>
-                </View>
-              )}
+            {activeTab === "exam" && quarterlyExamItems.length === 0 && (
+              <View style={styles.emptyState}>
+                <AlertCircle color="#9CA3AF" size={32} />
+                <Text style={styles.emptyStateText}>
+                  {selectedQuarter !== null
+                    ? `No quarterly exam records for ${selectedQuarterLabel}.`
+                    : "Quarterly exam has not been started yet."}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -2457,7 +2857,7 @@ export default function SubjectAnalytics() {
 
       {/* System-Generated Approach Modal */}
       <Modal
-        visible={showApproachModal}
+        visible={showApproachModal && !!improvementPlan}
         animationType="slide"
         transparent={true}
         onRequestClose={() => setShowApproachModal(false)}
@@ -2500,7 +2900,10 @@ export default function SubjectAnalytics() {
                         },
                       ]}
                     >
-                      {personalizedInsights?.currentGrade || "--"}%
+                      {personalizedInsights?.currentGrade !== null &&
+                      personalizedInsights?.currentGrade !== undefined
+                        ? `${personalizedInsights.currentGrade}%`
+                        : "--"}
                     </Text>
                   </View>
                   <View style={styles.goalArrow}>
@@ -2518,7 +2921,10 @@ export default function SubjectAnalytics() {
                         },
                       ]}
                     >
-                      {personalizedInsights?.expectedGrade || "--"}%
+                      {personalizedInsights?.expectedGrade !== null &&
+                      personalizedInsights?.expectedGrade !== undefined
+                        ? `${personalizedInsights.expectedGrade}%`
+                        : "--"}
                     </Text>
                   </View>
                   <View style={styles.goalArrow}>
@@ -2840,6 +3246,30 @@ const styles = StyleSheet.create({
     color: "#111827",
     marginLeft: 8,
   },
+  quarterSectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+    gap: 8,
+  },
+  quarterSectionTitleWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  selectedQuarterBadge: {
+    borderRadius: 999,
+    backgroundColor: "#FCE7F3",
+    borderWidth: 1,
+    borderColor: "#F9A8D4",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  selectedQuarterBadgeText: {
+    color: "#BE185D",
+    fontSize: 11,
+    fontWeight: "600",
+  },
 
   quarterGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   quarterCard: {
@@ -2851,6 +3281,11 @@ const styles = StyleSheet.create({
     borderColor: "#E5E7EB",
   },
   quarterCardActive: { backgroundColor: "#FFF", borderColor: "#FBCFE8" },
+  quarterCardSelected: {
+    borderColor: "#F472B6",
+    borderWidth: 1.5,
+    backgroundColor: "#FFF",
+  },
   quarterHeaderRow: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -2887,6 +3322,55 @@ const styles = StyleSheet.create({
   quarterFooterItem: { alignItems: "center" },
   quarterFooterValue: { fontSize: 13, fontWeight: "600", color: "#374151" },
   quarterFooterLabel: { fontSize: 10, color: "#6B7280" },
+  selectedQuarterSummary: {
+    marginTop: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#FBCFE8",
+    backgroundColor: "#FDF2F8",
+    padding: 12,
+  },
+  selectedQuarterSummaryHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+    gap: 8,
+  },
+  selectedQuarterSummaryTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#831843",
+    flex: 1,
+  },
+  selectedQuarterSummaryRemarks: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  selectedQuarterSummaryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  selectedQuarterSummaryItem: {
+    width: "47%",
+    backgroundColor: "#FFF",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#FBCFE8",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  selectedQuarterSummaryLabel: {
+    fontSize: 10,
+    color: "#6B7280",
+  },
+  selectedQuarterSummaryValue: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1F2937",
+    marginTop: 2,
+  },
 
   trendChart: { flexDirection: "row", height: 100 },
   trendYAxis: {
@@ -3574,6 +4058,28 @@ const styles = StyleSheet.create({
     color: "#9CA3AF",
     textAlign: "center",
     marginTop: 8,
+  },
+  pendingExpectedCard: {
+    marginTop: 6,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+  },
+  pendingExpectedTitle: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#374151",
+    textAlign: "center",
+    marginBottom: 4,
+  },
+  pendingExpectedText: {
+    fontSize: 11,
+    color: "#6B7280",
+    textAlign: "center",
+    lineHeight: 16,
   },
 
   // Modal Improvement Plan Styles

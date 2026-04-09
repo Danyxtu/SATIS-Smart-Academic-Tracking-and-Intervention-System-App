@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import SchoolPicture from "@assets/school.jpg";
 import {
   View,
@@ -18,8 +18,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { User, Lock, Eye, EyeClosed } from "lucide-react-native";
 import { useAuth } from "@context/AuthContext";
 import SchoolLogo from "@assets/school-logo.png";
+import * as SecureStore from "expo-secure-store";
 
 const { width, height } = Dimensions.get("window");
+const REMEMBERED_CREDENTIALS_KEY = "remembered_credentials";
 
 const Login = () => {
   const [loginInput, setLoginInput] = useState("");
@@ -30,14 +32,72 @@ const Login = () => {
   const [remember, setRemember] = useState(false);
   const { login } = useAuth();
 
+  useEffect(() => {
+    const loadRememberedCredentials = async () => {
+      try {
+        const stored = await SecureStore.getItemAsync(
+          REMEMBERED_CREDENTIALS_KEY,
+        );
+
+        if (!stored) return;
+
+        const parsed = JSON.parse(stored);
+        setLoginInput(parsed?.loginInput || "");
+        setPassword(parsed?.password || "");
+        setRemember(true);
+      } catch (err) {
+        console.warn("Login: failed to load remembered credentials", err);
+      }
+    };
+
+    loadRememberedCredentials();
+  }, []);
+
+  const persistRememberedCredentials = async () => {
+    try {
+      if (!remember) {
+        await SecureStore.deleteItemAsync(REMEMBERED_CREDENTIALS_KEY);
+        return;
+      }
+
+      await SecureStore.setItemAsync(
+        REMEMBERED_CREDENTIALS_KEY,
+        JSON.stringify({
+          loginInput: loginInput.trim(),
+          password,
+        }),
+      );
+    } catch (err) {
+      console.warn("Login: failed to persist remembered credentials", err);
+    }
+  };
+
+  const handleRememberToggle = async () => {
+    const nextRemember = !remember;
+    setRemember(nextRemember);
+
+    if (!nextRemember) {
+      try {
+        await SecureStore.deleteItemAsync(REMEMBERED_CREDENTIALS_KEY);
+      } catch (err) {
+        console.warn("Login: failed to clear remembered credentials", err);
+      }
+    }
+  };
+
   const handleLogin = async () => {
     if (!loginInput || !password) {
       setError("Please enter your username or email and password.");
       return;
     }
+
     setError("");
     setLoading(true);
+
+    await persistRememberedCredentials();
+
     const res = await login(loginInput, password);
+
     setLoading(false);
     if (!res.success) {
       setError(res.message || "Please check your credentials.");
@@ -127,7 +187,7 @@ const Login = () => {
               <View style={styles.rememberRow}>
                 <TouchableOpacity
                   style={[styles.checkbox, remember && styles.checkboxChecked]}
-                  onPress={() => setRemember(!remember)}
+                  onPress={handleRememberToggle}
                 >
                   {remember ? <View style={styles.checkboxInner} /> : null}
                 </TouchableOpacity>

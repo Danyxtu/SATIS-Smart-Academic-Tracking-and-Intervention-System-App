@@ -214,6 +214,14 @@ export default StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
+  subjectDetailCard: {
+    marginBottom: 16,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: "#fafafa",
+    borderWidth: 1,
+    borderColor: "#f3f4f6",
+  },
   subjectName: { fontSize: 14, fontWeight: "600", color: "#374151" },
   subjectStat: { fontSize: 13, fontWeight: "700" },
   progressBg: {
@@ -225,6 +233,11 @@ export default StyleSheet.create({
   },
   progressFill: { height: 10, borderRadius: 8 },
   absencesText: { fontSize: 12, color: "#6b7280", marginTop: 6 },
+  subjectHintText: {
+    fontSize: 11,
+    color: "#9ca3af",
+    marginTop: 6,
+  },
   activityRow: {
     flexDirection: "row",
     alignItems: "center",

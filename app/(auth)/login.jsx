@@ -13,15 +13,62 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { User, Lock, Eye, EyeClosed } from "lucide-react-native";
+import {
+  User,
+  Lock,
+  Eye,
+  EyeClosed,
+  QrCode,
+  Camera,
+  X,
+} from "lucide-react-native";
 import { useAuth } from "@context/AuthContext";
 import SchoolLogo from "@assets/school-logo.png";
 import * as SecureStore from "expo-secure-store";
+import { CameraView, useCameraPermissions } from "expo-camera";
 
 const { width, height } = Dimensions.get("window");
 const REMEMBERED_CREDENTIALS_KEY = "remembered_credentials";
+
+const parseQrCredentials = (rawValue) => {
+  const raw = String(rawValue ?? "").trim();
+
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+
+    if (
+      parsed?.type === "satis_student_credentials" &&
+      parsed?.username &&
+      parsed?.password
+    ) {
+      return {
+        loginInput: String(parsed.username).trim(),
+        password: String(parsed.password),
+      };
+    }
+  } catch (err) {
+    // Fall through to plain-text parsing.
+  }
+
+  const usernameLine = raw.match(/username\s*:\s*(.+)/i)?.[1]?.trim();
+  const passwordLine = raw.match(/password\s*:\s*(.+)/i)?.[1]?.trim();
+
+  if (usernameLine && passwordLine) {
+    return {
+      loginInput: usernameLine,
+      password: passwordLine,
+    };
+  }
+
+  return null;
+};
 
 const Login = () => {
   const [loginInput, setLoginInput] = useState("");
@@ -30,6 +77,10 @@ const Login = () => {
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(false);
+  const [scannerVisible, setScannerVisible] = useState(false);
+  const [scanLocked, setScanLocked] = useState(false);
+  const [scannerError, setScannerError] = useState("");
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const { login } = useAuth();
 
   useEffect(() => {
@@ -53,7 +104,10 @@ const Login = () => {
     loadRememberedCredentials();
   }, []);
 
-  const persistRememberedCredentials = async () => {
+  const persistRememberedCredentials = async (
+    loginInputValue = loginInput,
+    passwordValue = password,
+  ) => {
     try {
       if (!remember) {
         await SecureStore.deleteItemAsync(REMEMBERED_CREDENTIALS_KEY);
@@ -63,8 +117,8 @@ const Login = () => {
       await SecureStore.setItemAsync(
         REMEMBERED_CREDENTIALS_KEY,
         JSON.stringify({
-          loginInput: loginInput.trim(),
-          password,
+          loginInput: String(loginInputValue || "").trim(),
+          password: String(passwordValue || ""),
         }),
       );
     } catch (err) {
@@ -85,8 +139,16 @@ const Login = () => {
     }
   };
 
-  const handleLogin = async () => {
-    if (!loginInput || !password) {
+  const handleLogin = async (
+    overrideLoginInput = null,
+    overridePassword = null,
+  ) => {
+    const normalizedLoginInput = String(
+      overrideLoginInput ?? loginInput,
+    ).trim();
+    const passwordValue = String(overridePassword ?? password);
+
+    if (!normalizedLoginInput || !passwordValue) {
       setError("Please enter your username or email and password.");
       return;
     }
@@ -94,15 +156,62 @@ const Login = () => {
     setError("");
     setLoading(true);
 
-    await persistRememberedCredentials();
+    await persistRememberedCredentials(normalizedLoginInput, passwordValue);
 
-    const res = await login(loginInput, password);
+    const res = await login(normalizedLoginInput, passwordValue);
 
     setLoading(false);
     if (!res.success) {
       setError(res.message || "Please check your credentials.");
       return;
     }
+  };
+
+  const handleOpenScanner = async () => {
+    setScannerError("");
+    setScanLocked(false);
+
+    if (!cameraPermission?.granted) {
+      const nextPermission = await requestCameraPermission();
+      if (!nextPermission?.granted) {
+        setScannerError(
+          "Camera permission is required to scan student login QR codes.",
+        );
+      }
+    }
+
+    setScannerVisible(true);
+  };
+
+  const handleCloseScanner = () => {
+    setScannerVisible(false);
+    setScanLocked(false);
+  };
+
+  const handleQrScanned = async ({ data }) => {
+    if (scanLocked) {
+      return;
+    }
+
+    setScanLocked(true);
+    setScannerError("");
+
+    const parsedCredentials = parseQrCredentials(data);
+
+    if (!parsedCredentials) {
+      setScannerError(
+        "Unsupported QR code. Please scan a student credential QR from the web app.",
+      );
+      setScanLocked(false);
+      return;
+    }
+
+    setLoginInput(parsedCredentials.loginInput);
+    setPassword(parsedCredentials.password);
+    setScannerVisible(false);
+
+    await handleLogin(parsedCredentials.loginInput, parsedCredentials.password);
+    setScanLocked(false);
   };
 
   return (
@@ -219,6 +328,76 @@ const Login = () => {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      <TouchableOpacity
+        style={styles.scanFab}
+        onPress={handleOpenScanner}
+        activeOpacity={0.85}
+      >
+        <QrCode size={22} color="#fff" />
+      </TouchableOpacity>
+
+      <Modal
+        visible={scannerVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={handleCloseScanner}
+      >
+        <View style={styles.scannerBackdrop}>
+          <View style={styles.scannerCard}>
+            <View style={styles.scannerHeader}>
+              <View>
+                <Text style={styles.scannerTitle}>Scan Login QR</Text>
+                <Text style={styles.scannerSubtitle}>
+                  Point the camera at the student credentials QR.
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                onPress={handleCloseScanner}
+                style={styles.scannerCloseButton}
+                activeOpacity={0.8}
+              >
+                <X size={20} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.scannerBody}>
+              {cameraPermission?.granted ? (
+                <CameraView
+                  style={styles.cameraView}
+                  barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+                  onBarcodeScanned={scanLocked ? undefined : handleQrScanned}
+                />
+              ) : (
+                <View style={styles.permissionCard}>
+                  <Camera size={26} color="#E91E63" />
+                  <Text style={styles.permissionText}>
+                    Camera permission is needed to scan QR credentials.
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.permissionButton}
+                    onPress={handleOpenScanner}
+                  >
+                    <Text style={styles.permissionButtonText}>
+                      Allow Camera
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+
+            {scannerError ? (
+              <Text style={styles.scannerError}>{scannerError}</Text>
+            ) : (
+              <Text style={styles.scannerHint}>
+                Use only QR codes generated from Student Login Credentials in
+                the web class list.
+              </Text>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -393,6 +572,109 @@ const styles = StyleSheet.create({
     color: "#E91E63",
     fontSize: 14,
     fontWeight: "500",
+  },
+  scanFab: {
+    position: "absolute",
+    right: 24,
+    bottom: 26,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#E91E63",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#E91E63",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  scannerBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(17, 24, 39, 0.78)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 18,
+  },
+  scannerCard: {
+    width: "100%",
+    maxWidth: 390,
+    borderRadius: 20,
+    backgroundColor: "#fff",
+    padding: 16,
+  },
+  scannerHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  scannerTitle: {
+    color: "#111827",
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  scannerSubtitle: {
+    color: "#6B7280",
+    fontSize: 12,
+    marginTop: 4,
+  },
+  scannerCloseButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#F3F4F6",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  scannerBody: {
+    borderRadius: 14,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#FBCFE8",
+  },
+  cameraView: {
+    width: "100%",
+    aspectRatio: 1,
+  },
+  permissionCard: {
+    width: "100%",
+    minHeight: 240,
+    padding: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FDF2F8",
+  },
+  permissionText: {
+    marginTop: 10,
+    color: "#4B5563",
+    textAlign: "center",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  permissionButton: {
+    marginTop: 14,
+    backgroundColor: "#E91E63",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  permissionButtonText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  scannerHint: {
+    marginTop: 10,
+    color: "#6B7280",
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  scannerError: {
+    marginTop: 10,
+    color: "#E11D48",
+    fontSize: 12,
+    lineHeight: 17,
   },
 });
 

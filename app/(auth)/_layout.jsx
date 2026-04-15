@@ -6,6 +6,7 @@ export default function AuthLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="login" />
       <Stack.Screen name="force-change-password" />
+      <Stack.Screen name="student-email-verification" />
     </Stack>
   );
 }

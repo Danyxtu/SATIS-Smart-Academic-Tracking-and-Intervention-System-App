@@ -5,7 +5,8 @@ import { Stack } from "expo-router";
 import { View, Text } from "react-native";
 
 function RootLayoutNav() {
-  const { user, loading, mustChangePassword } = useAuth();
+  const { user, loading, mustChangePassword, requiresEmailVerification } =
+    useAuth();
   const router = useRouter();
   const segments = useSegments();
 
@@ -17,6 +18,9 @@ function RootLayoutNav() {
     const isForceChangePassword = segments
       .join("/")
       .includes("force-change-password");
+    const isStudentEmailVerification = segments
+      .join("/")
+      .includes("student-email-verification");
 
     // List of allowed screens outside of tabs for authenticated users
     const allowedScreens = [
@@ -33,13 +37,38 @@ function RootLayoutNav() {
       return;
     }
 
+    if (
+      user &&
+      !mustChangePassword &&
+      requiresEmailVerification &&
+      !isStudentEmailVerification
+    ) {
+      router.replace("/(auth)/student-email-verification");
+      return;
+    }
+
     // If user has changed password, redirect away from force-change-password
     if (user && !mustChangePassword && isForceChangePassword) {
+      if (requiresEmailVerification) {
+        router.replace("/(auth)/student-email-verification");
+        return;
+      }
+
       router.replace("/home");
       return;
     }
 
-    if (user && inAuthGroup && !isForceChangePassword) {
+    if (user && !requiresEmailVerification && isStudentEmailVerification) {
+      router.replace("/home");
+      return;
+    }
+
+    if (
+      user &&
+      inAuthGroup &&
+      !isForceChangePassword &&
+      !isStudentEmailVerification
+    ) {
       // User is signed in but in auth screens (not force-change-password), redirect to home
       router.replace("/home");
     } else if (!user && inTabsGroup) {
@@ -51,7 +80,14 @@ function RootLayoutNav() {
       router.replace("/login");
     }
     // If user is authenticated and on allowed screens or tabs, do nothing
-  }, [user, loading, mustChangePassword, segments, router]);
+  }, [
+    user,
+    loading,
+    mustChangePassword,
+    requiresEmailVerification,
+    segments,
+    router,
+  ]);
 
   if (loading) {
     return (

@@ -12,10 +12,7 @@ export default {
       resizeMode: "contain",
       backgroundColor: "#ffffff",
     },
-    plugins: [
-      "expo-secure-store",
-      ["expo-router"], // ← correct format
-    ],
+    plugins: ["expo-secure-store", ["expo-router"]],
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.danyxtu.satisapp",
@@ -37,6 +34,12 @@ export default {
       eas: {
         projectId: "5ff329ca-387f-4e65-a2d7-83637e2e5e1e",
       },
+    },
+    updates: {
+      url: "https://u.expo.dev/5ff329ca-387f-4e65-a2d7-83637e2e5e1e",
+    },
+    runtimeVersion: {
+      policy: "appVersion",
     },
   },
 };

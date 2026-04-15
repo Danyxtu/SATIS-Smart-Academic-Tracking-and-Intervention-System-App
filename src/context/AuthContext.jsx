@@ -18,6 +18,29 @@ axios.defaults.baseURL = API_URL;
 
 const AuthContext = createContext(null);
 
+const deriveVerificationFlags = (userData = {}, payloadFlags = {}) => {
+  const hasPersonalEmail =
+    typeof payloadFlags.has_personal_email === "boolean"
+      ? payloadFlags.has_personal_email
+      : Boolean(String(userData.personal_email ?? userData.email ?? "").trim());
+
+  const emailVerified =
+    typeof payloadFlags.email_verified === "boolean"
+      ? payloadFlags.email_verified
+      : Boolean(userData.email_verified_at);
+
+  const requiresEmailVerification =
+    typeof payloadFlags.requires_email_verification === "boolean"
+      ? payloadFlags.requires_email_verification
+      : !hasPersonalEmail || !emailVerified;
+
+  return {
+    hasPersonalEmail,
+    emailVerified,
+    requiresEmailVerification,
+  };
+};
+
 export function useAuth() {
   return useContext(AuthContext);
 }
@@ -26,6 +49,36 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [mustChangePassword, setMustChangePassword] = useState(false);
+  const [requiresEmailVerification, setRequiresEmailVerification] =
+    useState(false);
+
+  const syncSessionState = ({
+    token = null,
+    userData = null,
+    payload = {},
+  }) => {
+    const mergedUserData = userData ?? {};
+    const resolvedToken = token ?? user?.token ?? null;
+    const nextUser = resolvedToken
+      ? { token: resolvedToken, ...mergedUserData }
+      : { ...mergedUserData };
+
+    setUser(nextUser);
+
+    const nextMustChangePassword =
+      payload.must_change_password ??
+      mergedUserData.must_change_password ??
+      false;
+    setMustChangePassword(Boolean(nextMustChangePassword));
+
+    const verificationFlags = deriveVerificationFlags(mergedUserData, payload);
+    setRequiresEmailVerification(verificationFlags.requiresEmailVerification);
+
+    return {
+      mustChangePassword: Boolean(nextMustChangePassword),
+      ...verificationFlags,
+    };
+  };
 
   useEffect(() => {
     // On startup, check for a stored token and validate it by fetching the user.
@@ -45,15 +98,18 @@ export function AuthProvider({ children }) {
           try {
             const res = await axios.get(`/user`);
             const userData = res.data;
-            setUser({ token: session, ...userData });
-            // Check if user must change password
-            setMustChangePassword(userData.must_change_password ?? false);
+            syncSessionState({
+              token: session,
+              userData,
+              payload: userData,
+            });
           } catch (err) {
             // Token invalid or request failed — remove stored session
             await SecureStore.deleteItemAsync("user_session");
             delete axios.defaults.headers.common["Authorization"];
             setUser(null);
             setMustChangePassword(false);
+            setRequiresEmailVerification(false);
           }
         }
       } catch (err) {
@@ -85,7 +141,6 @@ export function AuthProvider({ children }) {
 
       const token = res.data.token;
       const userData = res.data.user;
-      const needsPasswordChange = res.data.must_change_password ?? false;
 
       // persist token
       await SecureStore.setItemAsync("user_session", token);
@@ -93,10 +148,17 @@ export function AuthProvider({ children }) {
       // set axios Authorization header for subsequent requests
       axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
 
-      setUser({ token, ...userData });
-      setMustChangePassword(needsPasswordChange);
+      const authFlags = syncSessionState({
+        token,
+        userData,
+        payload: res.data,
+      });
 
-      return { success: true, mustChangePassword: needsPasswordChange };
+      return {
+        success: true,
+        mustChangePassword: authFlags.mustChangePassword,
+        requiresEmailVerification: authFlags.requiresEmailVerification,
+      };
     } catch (err) {
       // Log error for debugging
       // eslint-disable-next-line no-console
@@ -121,15 +183,19 @@ export function AuthProvider({ children }) {
         password_confirmation,
       });
 
-      // Update user state and clear the password change flag
-      setUser((prev) => ({
-        ...prev,
-        ...res.data.user,
-        must_change_password: false,
-      }));
-      setMustChangePassword(false);
+      const authFlags = syncSessionState({
+        userData: res.data.user,
+        payload: {
+          ...res.data,
+          must_change_password: false,
+        },
+      });
 
-      return { success: true, message: res.data.message };
+      return {
+        success: true,
+        message: res.data.message,
+        requiresEmailVerification: authFlags.requiresEmailVerification,
+      };
     } catch (err) {
       console.error(
         "[AuthContext] changePassword error:",
@@ -140,6 +206,71 @@ export function AuthProvider({ children }) {
         err?.response?.data?.errors?.password?.[0] ||
         "Failed to change password";
       return { success: false, message };
+    }
+  };
+
+  const sendEmailVerification = async (emailInput) => {
+    try {
+      const trimmedEmail = String(emailInput ?? "").trim();
+      const payload = trimmedEmail ? { email: trimmedEmail } : {};
+
+      const res = await axios.post(`/student/email-verification/send`, payload);
+
+      if (res.data?.user) {
+        syncSessionState({
+          userData: res.data.user,
+          payload: res.data,
+        });
+      }
+
+      return {
+        success: true,
+        message: res.data?.message || "Verification email sent.",
+      };
+    } catch (err) {
+      console.error(
+        "[AuthContext] sendEmailVerification error:",
+        err?.response || err,
+      );
+
+      const message =
+        err?.response?.data?.errors?.email?.[0] ||
+        err?.response?.data?.message ||
+        "Failed to send verification email";
+
+      return { success: false, message };
+    }
+  };
+
+  const refreshEmailVerificationStatus = async () => {
+    try {
+      const res = await axios.get(`/student/email-verification/status`);
+
+      if (res.data?.user) {
+        syncSessionState({
+          userData: res.data.user,
+          payload: res.data,
+        });
+      }
+
+      return {
+        success: true,
+        requiresEmailVerification: Boolean(
+          res.data?.requires_email_verification,
+        ),
+      };
+    } catch (err) {
+      console.error(
+        "[AuthContext] refreshEmailVerificationStatus error:",
+        err?.response || err,
+      );
+
+      return {
+        success: false,
+        message:
+          err?.response?.data?.message ||
+          "Failed to refresh verification status",
+      };
     }
   };
 
@@ -154,6 +285,7 @@ export function AuthProvider({ children }) {
     } finally {
       setUser(null);
       setMustChangePassword(false);
+      setRequiresEmailVerification(false);
       await SecureStore.deleteItemAsync("user_session");
       delete axios.defaults.headers.common["Authorization"];
     }
@@ -165,9 +297,12 @@ export function AuthProvider({ children }) {
         user,
         loading,
         mustChangePassword,
+        requiresEmailVerification,
         login,
         logout,
         changePassword,
+        sendEmailVerification,
+        refreshEmailVerificationStatus,
       }}
     >
       {children}

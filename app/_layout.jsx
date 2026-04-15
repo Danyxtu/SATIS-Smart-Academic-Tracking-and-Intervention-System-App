@@ -2,13 +2,54 @@ import React, { useEffect } from "react";
 import { AuthProvider, useAuth } from "../src/context/AuthContext";
 import { useRouter, useSegments } from "expo-router";
 import { Stack } from "expo-router";
-import { View, Text } from "react-native";
+import { View, Text, Alert } from "react-native";
+import * as Updates from "expo-updates";
 
 function RootLayoutNav() {
   const { user, loading, mustChangePassword, requiresEmailVerification } =
     useAuth();
   const router = useRouter();
   const segments = useSegments();
+
+  // Add the Update Checker Effect
+  useEffect(() => {
+    async function checkForUpdates() {
+      if (__DEV__) return; // Don't check for updates in local development
+
+      try {
+        const update = await Updates.checkForUpdateAsync();
+
+        if (update.isAvailable) {
+          Alert.alert(
+            "Update Available",
+            "A new version of the app is available. Please update to continue.",
+            [
+              { text: "Later", style: "cancel" },
+              {
+                text: "Update Now",
+                onPress: async () => {
+                  try {
+                    await Updates.fetchUpdateAsync();
+                    await Updates.reloadAsync();
+                  } catch (error) {
+                    Alert.alert(
+                      "Update Failed",
+                      "Could not apply the update. Try restarting the app.",
+                    );
+                  }
+                },
+              },
+            ],
+          );
+        }
+      } catch (error) {
+        // Handle/ignore errors silently if device is offline, etc.
+        console.log(`Error checking for updates: ${error}`);
+      }
+    }
+
+    checkForUpdates();
+  }, []);
 
   useEffect(() => {
     if (loading) return; // Don't redirect until auth state is loaded

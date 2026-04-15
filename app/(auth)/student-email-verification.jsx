@@ -173,10 +173,10 @@ const StudentEmailVerification = () => {
     if (result.requiresEmailVerification) {
       setMessage(
         nextRetryAfter > 0
-          ? `Email is not verified yet. Open your inbox and tap the verification link. You can resend again in ${formatCountdown(
+          ? `Email is not verified yet. Check your inbox for the latest OTP, or resend when available in ${formatCountdown(
               nextRetryAfter,
             )}.`
-          : "Email is not verified yet. Open your inbox and tap the verification link.",
+          : "Email is not verified yet. Request and enter the latest 6-digit OTP.",
       );
     } else {
       setMessage("Email verified successfully. Redirecting...");

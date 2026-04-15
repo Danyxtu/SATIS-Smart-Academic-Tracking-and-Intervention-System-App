@@ -247,6 +247,17 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const refreshAuthenticatedUser = async () => {
+    const res = await axios.get(`/user`);
+
+    syncSessionState({
+      userData: res.data,
+      payload: res.data,
+    });
+
+    return res.data;
+  };
+
   // OTP-based email verification
   const sendEmailOtp = async (emailInput) => {
     try {
@@ -281,10 +292,20 @@ export function AuthProvider({ children }) {
       const trimmedOtp = String(otp ?? "").trim();
       const payload = { email: trimmedEmail, otp: trimmedOtp };
       const res = await axios.post(`/email-otp/verify`, payload);
-      // Optionally update user state here if backend returns user
+
+      if (res.data?.user) {
+        syncSessionState({
+          userData: res.data.user,
+          payload: res.data,
+        });
+      } else {
+        await refreshAuthenticatedUser();
+      }
+
       return {
         success: true,
         message: res.data?.message || "Email verified.",
+        redirectTo: res.data?.redirect_to || null,
       };
     } catch (err) {
       const message =
@@ -365,7 +386,8 @@ export function AuthProvider({ children }) {
         login,
         logout,
         changePassword,
-        sendEmailVerification,
+        sendEmailOtp,
+        verifyEmailOtp,
         refreshEmailVerificationStatus,
       }}
     >

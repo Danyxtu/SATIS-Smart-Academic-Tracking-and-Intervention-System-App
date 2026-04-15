@@ -89,18 +89,38 @@ const Login = () => {
         const stored = await SecureStore.getItemAsync(
           REMEMBERED_CREDENTIALS_KEY,
         );
-
         if (!stored) return;
-
-        const parsed = JSON.parse(stored);
-        setLoginInput(parsed?.loginInput || "");
-        setPassword(parsed?.password || "");
+        let parsed;
+        try {
+          parsed = JSON.parse(stored);
+        } catch (err) {
+          // Corrupted data, clear it
+          await SecureStore.deleteItemAsync(REMEMBERED_CREDENTIALS_KEY);
+          setLoginInput("");
+          setPassword("");
+          setRemember(false);
+          return;
+        }
+        if (
+          typeof parsed?.loginInput !== "string" ||
+          typeof parsed?.password !== "string"
+        ) {
+          await SecureStore.deleteItemAsync(REMEMBERED_CREDENTIALS_KEY);
+          setLoginInput("");
+          setPassword("");
+          setRemember(false);
+          return;
+        }
+        setLoginInput(parsed.loginInput);
+        setPassword(parsed.password);
         setRemember(true);
       } catch (err) {
         console.warn("Login: failed to load remembered credentials", err);
+        setLoginInput("");
+        setPassword("");
+        setRemember(false);
       }
     };
-
     loadRememberedCredentials();
   }, []);
 
@@ -197,7 +217,6 @@ const Login = () => {
     setScannerError("");
 
     const parsedCredentials = parseQrCredentials(data);
-
     if (!parsedCredentials) {
       setScannerError(
         "Unsupported QR code. Please scan a student credential QR from the web app.",
@@ -205,12 +224,17 @@ const Login = () => {
       setScanLocked(false);
       return;
     }
-
-    setLoginInput(parsedCredentials.loginInput);
-    setPassword(parsedCredentials.password);
+    setLoginInput(parsedCredentials.loginInput || "");
+    setPassword(parsedCredentials.password || "");
     setScannerVisible(false);
-
-    await handleLogin(parsedCredentials.loginInput, parsedCredentials.password);
+    try {
+      await handleLogin(
+        parsedCredentials.loginInput,
+        parsedCredentials.password,
+      );
+    } catch (err) {
+      setScannerError("Login failed. Please check credentials or try again.");
+    }
     setScanLocked(false);
   };
 
@@ -321,7 +345,15 @@ const Login = () => {
               </TouchableOpacity>
 
               {/* Forgot Password */}
-              <TouchableOpacity style={styles.forgotPasswordButton}>
+              <TouchableOpacity
+                style={styles.forgotPasswordButton}
+                onPress={() => {
+                  // TODO: Replace with navigation to reset screen if available
+                  setError(
+                    "Please contact your school administrator to reset your password.",
+                  );
+                }}
+              >
                 <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
               </TouchableOpacity>
             </View>

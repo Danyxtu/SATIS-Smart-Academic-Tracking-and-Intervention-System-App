@@ -34,8 +34,12 @@ import {
   CheckSquare,
   RefreshCw,
   BarChart2,
+  Upload,
+  FileText,
+  X,
 } from "lucide-react-native";
 import axios from "axios";
+import * as DocumentPicker from "expo-document-picker";
 
 const InterventionFeedback = () => {
   const { highlight } = useLocalSearchParams();
@@ -49,6 +53,14 @@ const InterventionFeedback = () => {
   const [completionModalVisible, setCompletionModalVisible] = useState(false);
   const [selectedIntervention, setSelectedIntervention] = useState(null);
   const [completionNotes, setCompletionNotes] = useState("");
+  
+  // Proof upload states
+  const [proofModalVisible, setProofModalVisible] = useState(false);
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [proofFile, setProofFile] = useState(null);
+  const [proofNotes, setProofNotes] = useState("");
+  const [isSubmittingProof, setIsSubmittingProof] = useState(false);
+
   const scrollViewRef = useRef(null);
   const feedbackRefs = useRef({});
 
@@ -114,6 +126,80 @@ const InterventionFeedback = () => {
     } catch (err) {
       console.warn("Mark read error:", err?.response || err);
     }
+  };
+
+  const handlePickDocument = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["application/pdf", "image/*"],
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setProofFile(result.assets[0]);
+      }
+    } catch (err) {
+      console.warn("Document pick error:", err);
+      Alert.alert("Error", "Failed to pick document");
+    }
+  };
+
+  const handleSubmitProof = async () => {
+    if (!selectedTask || !proofFile) {
+      Alert.alert("Error", "Please select a file to upload");
+      return;
+    }
+
+    try {
+      setIsSubmittingProof(true);
+
+      const formData = new FormData();
+      formData.append("proof", {
+        uri: proofFile.uri,
+        name: proofFile.name,
+        type: proofFile.mimeType || "application/octet-stream",
+      });
+
+      if (proofNotes.trim()) {
+        formData.append("notes", proofNotes.trim());
+      }
+
+      const res = await axios.post(
+        `/student/interventions/tasks/${selectedTask.id}/complete`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        },
+      );
+
+      Alert.alert(
+        "Success",
+        res?.data?.message || "Proof submitted successfully!",
+      );
+
+      setProofModalVisible(false);
+      setSelectedTask(null);
+      setProofFile(null);
+      setProofNotes("");
+      fetchData(true);
+    } catch (err) {
+      console.warn("Proof submission error:", err?.response || err);
+      Alert.alert(
+        "Submission Failed",
+        err?.response?.data?.message || "Failed to submit proof.",
+      );
+    } finally {
+      setIsSubmittingProof(false);
+    }
+  };
+
+  const openProofModal = (task) => {
+    setSelectedTask(task);
+    setProofFile(null);
+    setProofNotes("");
+    setProofModalVisible(true);
   };
 
   const openCompletionModal = (intervention) => {
@@ -314,6 +400,7 @@ const InterventionFeedback = () => {
               key={intervention.id}
               intervention={intervention}
               onCompleteTask={handleCompleteTask}
+              onOpenProofModal={openProofModal}
               onRequestCompletion={openCompletionModal}
               requestingCompletion={requestingCompletionId === intervention.id}
             />
@@ -359,6 +446,118 @@ const InterventionFeedback = () => {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Proof Submission Modal */}
+      <Modal
+        visible={proofModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() =>
+          !isSubmittingProof && setProofModalVisible(false)
+        }
+      >
+        <View style={styles.completionModalOverlay}>
+          <View style={styles.completionModalCard}>
+            <View style={styles.completionModalHeader}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <Text style={styles.completionModalTitle}>Submit Proof</Text>
+                <TouchableOpacity
+                  onPress={() => setProofModalVisible(false)}
+                  disabled={isSubmittingProof}
+                >
+                  <X color="#6B7280" size={20} />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.completionModalSubtitle}>
+                {selectedTask?.text || "Task Proof"}
+              </Text>
+            </View>
+
+            <View style={styles.proofUploadContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.filePickerBtn,
+                  proofFile && styles.filePickerBtnSelected,
+                ]}
+                onPress={handlePickDocument}
+                disabled={isSubmittingProof}
+              >
+                {proofFile ? (
+                  <FileText color="#059669" size={24} />
+                ) : (
+                  <Upload color="#DB2777" size={24} />
+                )}
+                <Text
+                  style={[
+                    styles.filePickerText,
+                    proofFile && styles.filePickerTextSelected,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {proofFile ? proofFile.name : "Select Proof (PDF or Image)"}
+                </Text>
+              </TouchableOpacity>
+
+              {proofFile && (
+                <TouchableOpacity
+                  style={styles.removeFileBtn}
+                  onPress={() => setProofFile(null)}
+                  disabled={isSubmittingProof}
+                >
+                  <Text style={styles.removeFileText}>Remove file</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <Text style={styles.inputLabel}>Notes for teacher (optional)</Text>
+            <TextInput
+              style={styles.completionNotesInput}
+              value={proofNotes}
+              onChangeText={setProofNotes}
+              placeholder="Add any details about your submission..."
+              placeholderTextColor="#9CA3AF"
+              multiline
+              maxLength={500}
+              textAlignVertical="top"
+              editable={!isSubmittingProof}
+            />
+
+            <View style={styles.completionModalActions}>
+              <TouchableOpacity
+                style={styles.completionCancelBtn}
+                onPress={() => setProofModalVisible(false)}
+                disabled={isSubmittingProof}
+              >
+                <Text style={styles.completionCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.completionSubmitBtn,
+                  (isSubmittingProof || !proofFile) &&
+                    styles.completionSubmitBtnDisabled,
+                  { backgroundColor: "#DB2777" },
+                ]}
+                onPress={handleSubmitProof}
+                disabled={isSubmittingProof || !proofFile}
+              >
+                {isSubmittingProof ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={styles.completionSubmitBtnText}>
+                    Submit Proof
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={completionModalVisible}
@@ -446,6 +645,7 @@ const StatCard = ({ label, value, icon: Icon, color, bgColor }) => (
 const InterventionCard = ({
   intervention,
   onCompleteTask,
+  onOpenProofModal,
   onRequestCompletion,
   requestingCompletion,
 }) => {
@@ -681,28 +881,57 @@ const InterventionCard = ({
 
           {isExpanded && (
             <View style={styles.tasksList}>
-              {intervention.tasks.map((task) => (
-                <TouchableOpacity
-                  key={task.id}
-                  style={styles.taskItem}
-                  onPress={() => !task.completed && onCompleteTask(task.id)}
-                  disabled={task.completed}
-                >
-                  {task.completed ? (
-                    <CheckSquare color="#DB2777" size={18} />
-                  ) : (
-                    <Square color="#9CA3AF" size={18} />
-                  )}
-                  <Text
-                    style={[
-                      styles.taskText,
-                      task.completed && styles.taskTextCompleted,
-                    ]}
-                  >
-                    {task.text}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {intervention.tasks.map((task) => {
+                const isRemote = task.delivery_mode === "remote";
+                const isPendingReview = task.isPendingReview;
+
+                return (
+                  <View key={task.id} style={styles.taskItemContainer}>
+                    <TouchableOpacity
+                      style={styles.taskItem}
+                      onPress={() => {
+                        if (task.completed || isPendingReview) return;
+                        if (isRemote) {
+                          onOpenProofModal(task);
+                        } else {
+                          onCompleteTask(task.id);
+                        }
+                      }}
+                      disabled={task.completed || isPendingReview}
+                    >
+                      {task.completed ? (
+                        <CheckSquare color="#DB2777" size={18} />
+                      ) : isPendingReview ? (
+                        <Clock color="#F59E0B" size={18} />
+                      ) : (
+                        <Square color="#9CA3AF" size={18} />
+                      )}
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={[
+                            styles.taskText,
+                            task.completed && styles.taskTextCompleted,
+                            isPendingReview && styles.taskTextPending,
+                          ]}
+                        >
+                          {task.text}
+                          {isRemote && !task.completed && !isPendingReview && (
+                            <Text style={styles.remoteBadge}> (Remote)</Text>
+                          )}
+                        </Text>
+                        {isPendingReview && (
+                          <Text style={styles.pendingReviewText}>
+                            Proof submitted, awaiting review
+                          </Text>
+                        )}
+                      </View>
+                      {isRemote && !task.completed && !isPendingReview && (
+                        <Upload color="#DB2777" size={16} />
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
             </View>
           )}
 
@@ -1228,6 +1457,65 @@ const styles = StyleSheet.create({
   },
   progressFill: { height: "100%", backgroundColor: "#DB2777", borderRadius: 4 },
   noTasksText: { fontSize: 13, color: "#9CA3AF", fontStyle: "italic" },
+  taskItemContainer: {
+    marginBottom: 4,
+  },
+  taskTextPending: {
+    color: "#D97706",
+    fontStyle: "italic",
+  },
+  pendingReviewText: {
+    fontSize: 11,
+    color: "#F59E0B",
+    marginTop: 2,
+    fontWeight: "500",
+  },
+  remoteBadge: {
+    fontSize: 11,
+    color: "#DB2777",
+    fontWeight: "700",
+  },
+  proofUploadContainer: {
+    marginVertical: 16,
+    alignItems: "center",
+  },
+  filePickerBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    borderWidth: 2,
+    borderStyle: "dashed",
+    borderColor: "#DB2777",
+    borderRadius: 12,
+    padding: 20,
+    width: "100%",
+    backgroundColor: "#FFF1F2",
+  },
+  filePickerBtnSelected: {
+    borderColor: "#059669",
+    backgroundColor: "#ECFDF5",
+    borderStyle: "solid",
+  },
+  filePickerText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#DB2777",
+    flex: 1,
+    textAlign: "center",
+  },
+  filePickerTextSelected: {
+    color: "#059669",
+  },
+  removeFileBtn: {
+    marginTop: 8,
+    padding: 4,
+  },
+  removeFileText: {
+    fontSize: 12,
+    color: "#DC2626",
+    textDecorationLine: "underline",
+  },
   completionRequestBox: {
     marginTop: 12,
     padding: 12,

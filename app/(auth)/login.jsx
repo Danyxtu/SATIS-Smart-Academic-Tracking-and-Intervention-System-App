@@ -333,7 +333,7 @@ const Login = () => {
                   styles.loginButton,
                   loading && styles.loginButtonDisabled,
                 ]}
-                onPress={handleLogin}
+                onPress={() => handleLogin()}
                 disabled={loading}
                 activeOpacity={0.85}
               >

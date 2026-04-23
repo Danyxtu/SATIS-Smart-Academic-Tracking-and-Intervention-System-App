@@ -1,7 +1,11 @@
 import React, { useState, useRef } from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import PagerView from "react-native-pager-view";
+import { Platform } from "react-native";
+let Pager = null;
+if (Platform.OS !== "web") {
+  Pager = require("../../src/components/Pager").default;
+}
 import { useRouter } from "expo-router";
 import {
   LayoutDashboard,
@@ -139,29 +143,41 @@ const LandingIndex = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
-      <PagerView
-        ref={pagerRef}
-        style={styles.pagerView}
-        initialPage={0}
-        onPageSelected={onPageSelected}
-      >
-        <View key="0" style={styles.page}>
-          <Screen1Content onNext={() => goToPage(1)} />
+      {Platform.OS !== "web" && Pager ? (
+        <Pager
+          ref={pagerRef}
+          style={styles.pagerView}
+          initialPage={0}
+          onPageSelected={onPageSelected}
+        >
+          <View key="0" style={styles.page}>
+            <Screen1Content onNext={() => goToPage(1)} />
+          </View>
+          <View key="1" style={styles.page}>
+            <Screen2Content onNext={() => goToPage(2)} />
+          </View>
+          <View key="2" style={styles.page}>
+            <Screen3Content onGetStarted={handleGetStarted} />
+          </View>
+        </Pager>
+      ) : (
+        <View>
+          <Screen1Content onNext={() => setCurrentPage(1)} />
+          {currentPage === 1 && (
+            <Screen2Content onNext={() => setCurrentPage(2)} />
+          )}
+          {currentPage === 2 && (
+            <Screen3Content onGetStarted={handleGetStarted} />
+          )}
         </View>
-        <View key="1" style={styles.page}>
-          <Screen2Content onNext={() => goToPage(2)} />
-        </View>
-        <View key="2" style={styles.page}>
-          <Screen3Content onGetStarted={handleGetStarted} />
-        </View>
-      </PagerView>
+      )}
 
       {/* Dynamic pagination dots */}
       <View style={styles.indicatorContainer}>
         {[0, 1, 2].map((idx) => (
           <TouchableOpacity
             key={idx}
-            onPress={() => goToPage(idx)}
+            onPress={() => setCurrentPage(idx)}
             activeOpacity={0.7}
           >
             <View

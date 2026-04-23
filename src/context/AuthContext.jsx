@@ -155,7 +155,7 @@ export function AuthProvider({ children }) {
 
   const login = async (loginInput, password) => {
     try {
-      const identifier = (loginInput || "").trim();
+      const identifier = String(loginInput || "").trim();
 
       // call backend login endpoint
       // Use relative path because axios.defaults.baseURL was set earlier
